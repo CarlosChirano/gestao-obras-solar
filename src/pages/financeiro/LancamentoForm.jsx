@@ -76,13 +76,6 @@ const formatMoneyFromDB = (value) => {
   return maskMoney(cents)
 }
 
-// Formata número do banco para exibição
-const formatMoneyFromDB = (value) => {
-  if (!value && value !== 0) return ''
-  const cents = Math.round(value * 100).toString()
-  return maskMoney(cents)
-}
-
 const LancamentoForm = () => {
   const { id } = useParams()
   const navigate = useNavigate()
