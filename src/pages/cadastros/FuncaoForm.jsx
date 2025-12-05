@@ -11,26 +11,68 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-// Máscara de Moeda - R$ 0.000,00
+// ============================================
+// MÁSCARA DE MOEDA - R$ 0.000.000,00
+// ============================================
+
 const maskMoney = (value) => {
   if (!value) return ''
+  
+  // Remove tudo que não é número
   let numbers = value.toString().replace(/\D/g, '')
+  
+  // Se vazio, retorna vazio
+  if (!numbers || numbers === '0') return ''
+  
+  // Remove zeros à esquerda
+  numbers = numbers.replace(/^0+/, '')
+  
+  // Se ficou vazio após remover zeros, retorna vazio
   if (!numbers) return ''
-  const amount = parseInt(numbers) / 100
-  return amount.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
+  
+  // Garante pelo menos 3 dígitos (para os centavos)
+  numbers = numbers.padStart(3, '0')
+  
+  // Separa reais e centavos
+  const cents = numbers.slice(-2)
+  let reais = numbers.slice(0, -2)
+  
+  // Remove zeros à esquerda dos reais
+  reais = reais.replace(/^0+/, '') || '0'
+  
+  // Adiciona pontos a cada 3 dígitos nos reais
+  reais = reais.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  
+  return `R$ ${reais},${cents}`
 }
 
+// Converte valor formatado para número (para salvar no banco)
 const parseMoney = (value) => {
   if (!value) return null
-  const numbers = value.replace(/[R$\s.]/g, '').replace(',', '.')
+  
+  // Remove R$, espaços e pontos, substitui vírgula por ponto
+  const numbers = value
+    .replace('R$', '')
+    .replace(/\s/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.')
+  
   const parsed = parseFloat(numbers)
   return isNaN(parsed) ? null : parsed
 }
+
+// Formata número do banco para exibição
+const formatMoneyFromDB = (value) => {
+  if (!value && value !== 0) return ''
+  
+  // Multiplica por 100 para converter em centavos e formata
+  const cents = Math.round(value * 100).toString()
+  return maskMoney(cents)
+}
+
+// ============================================
+// COMPONENTE PRINCIPAL
+// ============================================
 
 const FuncaoForm = () => {
   const { id } = useParams()
@@ -66,8 +108,8 @@ const FuncaoForm = () => {
       setFormData({
         nome: funcao.nome || '',
         descricao: funcao.descricao || '',
-        valor_diaria: funcao.valor_diaria ? maskMoney((funcao.valor_diaria * 100).toString()) : '',
-        valor_meia_diaria: funcao.valor_meia_diaria ? maskMoney((funcao.valor_meia_diaria * 100).toString()) : ''
+        valor_diaria: formatMoneyFromDB(funcao.valor_diaria),
+        valor_meia_diaria: formatMoneyFromDB(funcao.valor_meia_diaria)
       })
     }
   }, [funcao])
@@ -177,7 +219,7 @@ const FuncaoForm = () => {
               {isEdicao ? 'Editar Função' : 'Nova Função'}
             </h1>
             <p className="text-gray-600">
-              {isEdicao ? 'Atualize os dados da função' : 'Cadastre uma nova função'}
+              {isEdicao ? 'Atualize os dados da função' : 'Preencha os dados da função'}
             </p>
           </div>
         </div>

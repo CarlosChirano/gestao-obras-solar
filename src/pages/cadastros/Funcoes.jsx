@@ -2,8 +2,19 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
-import { Plus, Search, Edit, Trash2, Briefcase, Loader2, DollarSign } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Briefcase, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+
+// Formata valor para moeda brasileira
+const formatCurrency = (value) => {
+  if (!value && value !== 0) return 'R$ 0,00'
+  return parseFloat(value).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })
+}
 
 const Funcoes = () => {
   const [search, setSearch] = useState('')
@@ -43,13 +54,6 @@ const Funcoes = () => {
     f.nome.toLowerCase().includes(search.toLowerCase()) ||
     f.descricao?.toLowerCase().includes(search.toLowerCase())
   )
-
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value || 0)
-  }
 
   return (
     <div className="space-y-6">
@@ -117,10 +121,9 @@ const Funcoes = () => {
                       </p>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1 text-green-600 font-medium">
-                        <DollarSign className="w-4 h-4" />
+                      <span className="text-green-600 font-medium">
                         {formatCurrency(funcao.valor_diaria)}
-                      </div>
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">

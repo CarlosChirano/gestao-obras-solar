@@ -20,25 +20,67 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-// Máscara de Moeda - R$ 0.000,00
+// ============================================
+// MÁSCARA DE MOEDA - R$ 0.000.000,00
+// ============================================
+
 const maskMoney = (value) => {
   if (!value) return ''
+  
+  // Remove tudo que não é número
   let numbers = value.toString().replace(/\D/g, '')
+  
+  // Se vazio ou só zeros, retorna vazio
+  if (!numbers || numbers === '0') return ''
+  
+  // Remove zeros à esquerda
+  numbers = numbers.replace(/^0+/, '')
+  
+  // Se ficou vazio após remover zeros, retorna vazio
   if (!numbers) return ''
-  const amount = parseInt(numbers) / 100
-  return amount.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
+  
+  // Garante pelo menos 3 dígitos (para os centavos)
+  numbers = numbers.padStart(3, '0')
+  
+  // Separa reais e centavos
+  const cents = numbers.slice(-2)
+  let reais = numbers.slice(0, -2)
+  
+  // Remove zeros à esquerda dos reais
+  reais = reais.replace(/^0+/, '') || '0'
+  
+  // Adiciona pontos a cada 3 dígitos nos reais
+  reais = reais.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  
+  return `R$ ${reais},${cents}`
 }
 
 const parseMoney = (value) => {
   if (!value) return null
-  const numbers = value.replace(/[R$\s.]/g, '').replace(',', '.')
+  
+  // Remove R$, espaços e pontos, substitui vírgula por ponto
+  const numbers = value
+    .replace('R$', '')
+    .replace(/\s/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.')
+  
   const parsed = parseFloat(numbers)
   return isNaN(parsed) ? null : parsed
+}
+
+// Formata número do banco para exibição
+const formatMoneyFromDB = (value) => {
+  if (!value && value !== 0) return ''
+  const cents = Math.round(value * 100).toString()
+  return maskMoney(cents)
+}
+
+// Formata número do banco para exibição
+const formatMoneyFromDB = (value) => {
+  if (!value && value !== 0) return ''
+  const cents = Math.round(value * 100).toString()
+  return maskMoney(cents)
 }
 
 const LancamentoForm = () => {
@@ -158,7 +200,7 @@ const LancamentoForm = () => {
       setFormData({
         tipo: lancamento.tipo || 'despesa',
         descricao: lancamento.descricao || '',
-        valor: lancamento.valor ? maskMoney((lancamento.valor * 100).toString()) : '',
+        valor: formatMoneyFromDB(lancamento.valor),
         data_vencimento: lancamento.data_vencimento || '',
         data_pagamento: lancamento.data_pagamento || '',
         data_competencia: lancamento.data_competencia || '',

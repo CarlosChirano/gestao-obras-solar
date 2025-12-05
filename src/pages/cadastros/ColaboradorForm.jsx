@@ -91,35 +91,61 @@ const isValidCPF = (cpf) => {
   return true
 }
 
-// Máscara de Moeda - R$ 0.000,00
+// ============================================
+// MÁSCARA DE MOEDA - R$ 0.000.000,00
+// ============================================
+
 const maskMoney = (value) => {
   if (!value) return ''
   
   // Remove tudo que não é número
   let numbers = value.toString().replace(/\D/g, '')
   
-  // Se vazio, retorna vazio
+  // Se vazio ou só zeros, retorna vazio
+  if (!numbers || numbers === '0') return ''
+  
+  // Remove zeros à esquerda
+  numbers = numbers.replace(/^0+/, '')
+  
+  // Se ficou vazio após remover zeros, retorna vazio
   if (!numbers) return ''
   
-  // Converte para número e divide por 100 (para centavos)
-  const amount = parseInt(numbers) / 100
+  // Garante pelo menos 3 dígitos (para os centavos)
+  numbers = numbers.padStart(3, '0')
   
-  // Formata como moeda brasileira
-  return amount.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })
+  // Separa reais e centavos
+  const cents = numbers.slice(-2)
+  let reais = numbers.slice(0, -2)
+  
+  // Remove zeros à esquerda dos reais
+  reais = reais.replace(/^0+/, '') || '0'
+  
+  // Adiciona pontos a cada 3 dígitos nos reais
+  reais = reais.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  
+  return `R$ ${reais},${cents}`
 }
 
 // Converte valor formatado para número (para salvar no banco)
 const parseMoney = (value) => {
   if (!value) return null
-  // Remove R$, pontos e substitui vírgula por ponto
-  const numbers = value.replace(/[R$\s.]/g, '').replace(',', '.')
+  
+  // Remove R$, espaços e pontos, substitui vírgula por ponto
+  const numbers = value
+    .replace('R$', '')
+    .replace(/\s/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.')
   const parsed = parseFloat(numbers)
   return isNaN(parsed) ? null : parsed
+}
+
+// Formata número do banco para exibição
+const formatMoneyFromDB = (value) => {
+  if (!value && value !== 0) return ''
+  // Multiplica por 100 para ter os centavos como inteiro
+  const cents = Math.round(value * 100).toString()
+  return maskMoney(cents)
 }
 
 const fetchAddressByCEP = async (cep) => {
@@ -226,7 +252,7 @@ const ColaboradorForm = () => {
         cep: colaborador.cep || '',
         funcao_id: colaborador.funcao_id || '',
         data_admissao: colaborador.data_admissao || '',
-        salario: colaborador.salario ? maskMoney((colaborador.salario * 100).toString()) : '',
+        salario: formatMoneyFromDB(colaborador.salario),
         pix: colaborador.pix || '',
         banco: colaborador.banco || '',
         agencia: colaborador.agencia || '',
