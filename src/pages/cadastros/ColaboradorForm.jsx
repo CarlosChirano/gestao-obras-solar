@@ -13,9 +13,102 @@ import {
   Trash2,
   AlertTriangle,
   CheckCircle,
-  Calendar
+  Calendar,
+  AlertCircle,
+  Check
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+
+// ============================================
+// FUNÇÕES DE MÁSCARA
+// ============================================
+
+const maskCPF = (value) => {
+  if (!value) return ''
+  return value
+    .replace(/\D/g, '')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})/, '$1-$2')
+    .replace(/(-\d{2})\d+?$/, '$1')
+    .slice(0, 14)
+}
+
+const maskPhone = (value) => {
+  if (!value) return ''
+  const numbers = value.replace(/\D/g, '')
+  if (numbers.length <= 10) {
+    return numbers
+      .replace(/(\d{2})(\d)/, '($1) $2')
+      .replace(/(\d{4})(\d)/, '$1-$2')
+      .slice(0, 14)
+  }
+  return numbers
+    .replace(/(\d{2})(\d)/, '($1) $2')
+    .replace(/(\d{5})(\d)/, '$1-$2')
+    .slice(0, 15)
+}
+
+const maskCEP = (value) => {
+  if (!value) return ''
+  return value
+    .replace(/\D/g, '')
+    .replace(/(\d{2})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1-$2')
+    .replace(/(-\d{3})\d+?$/, '$1')
+    .slice(0, 10)
+}
+
+const isValidEmail = (email) => {
+  if (!email) return true
+  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return regex.test(email)
+}
+
+const isValidCPF = (cpf) => {
+  if (!cpf) return true
+  const numbers = cpf.replace(/\D/g, '')
+  
+  if (numbers.length !== 11) return false
+  if (/^(\d)\1+$/.test(numbers)) return false
+  
+  let sum = 0
+  for (let i = 0; i < 9; i++) {
+    sum += parseInt(numbers[i]) * (10 - i)
+  }
+  let digit = (sum * 10) % 11
+  if (digit === 10) digit = 0
+  if (digit !== parseInt(numbers[9])) return false
+  
+  sum = 0
+  for (let i = 0; i < 10; i++) {
+    sum += parseInt(numbers[i]) * (11 - i)
+  }
+  digit = (sum * 10) % 11
+  if (digit === 10) digit = 0
+  if (digit !== parseInt(numbers[10])) return false
+  
+  return true
+}
+
+const fetchAddressByCEP = async (cep) => {
+  const numbers = cep.replace(/\D/g, '')
+  if (numbers.length !== 8) return null
+  
+  try {
+    const response = await fetch(`https://viacep.com.br/ws/${numbers}/json/`)
+    const data = await response.json()
+    if (data.erro) return null
+    return {
+      endereco: data.logradouro || '',
+      bairro: data.bairro || '',
+      cidade: data.localidade || '',
+      estado: data.uf || ''
+    }
+  } catch (error) {
+    return null
+  }
+}
 
 const ColaboradorForm = () => {
   const navigate = useNavigate()
@@ -53,7 +146,11 @@ const ColaboradorForm = () => {
   
   // EPIs
   const [epis, setEpis] = useState([])
-
+  
+  // Estados para validação
+  const [errors, setErrors] = useState({})
+  const [loadingCEP, setLoadingCEP] = useState(false)
+  
   // Buscar funções
   const { data: funcoes } = useQuery({
     queryKey: ['funcoes-select'],
@@ -137,6 +234,51 @@ const ColaboradorForm = () => {
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  // Handlers com máscaras
+  const handleCPFChange = (e) => {
+    const masked = maskCPF(e.target.value)
+    setFormData(prev => ({ ...prev, cpf: masked }))
+    if (masked.length === 14) {
+      setErrors(prev => ({ ...prev, cpf: !isValidCPF(masked) }))
+    } else {
+      setErrors(prev => ({ ...prev, cpf: false }))
+    }
+  }
+
+  const handlePhoneChange = (e) => {
+    const masked = maskPhone(e.target.value)
+    setFormData(prev => ({ ...prev, telefone: masked }))
+  }
+
+  const handleEmailBlur = () => {
+    if (formData.email && !isValidEmail(formData.email)) {
+      setErrors(prev => ({ ...prev, email: true }))
+    } else {
+      setErrors(prev => ({ ...prev, email: false }))
+    }
+  }
+
+  const handleCEPChange = async (e) => {
+    const masked = maskCEP(e.target.value)
+    setFormData(prev => ({ ...prev, cep: masked }))
+    
+    if (masked.replace(/\D/g, '').length === 8) {
+      setLoadingCEP(true)
+      const address = await fetchAddressByCEP(masked)
+      setLoadingCEP(false)
+      
+      if (address) {
+        setFormData(prev => ({
+          ...prev,
+          endereco: address.endereco || prev.endereco,
+          cidade: address.cidade || prev.cidade,
+          estado: address.estado || prev.estado
+        }))
+        toast.success('Endereço preenchido automaticamente!')
+      }
+    }
   }
 
   // Funções para Certificados
@@ -476,7 +618,23 @@ const ColaboradorForm = () => {
                 </div>
                 <div>
                   <label className="label">CPF</label>
-                  <input type="text" name="cpf" value={formData.cpf} onChange={handleChange} className="input-field" placeholder="000.000.000-00" />
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      name="cpf" 
+                      value={formData.cpf} 
+                      onChange={handleCPFChange} 
+                      className={`input-field ${errors.cpf ? 'border-red-500' : ''}`}
+                      placeholder="000.000.000-00"
+                      maxLength={14}
+                    />
+                    {formData.cpf && formData.cpf.length === 14 && (
+                      <span className={`absolute right-3 top-1/2 -translate-y-1/2 ${errors.cpf ? 'text-red-500' : 'text-green-500'}`}>
+                        {errors.cpf ? <AlertCircle className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                      </span>
+                    )}
+                  </div>
+                  {errors.cpf && <p className="text-red-500 text-xs mt-1">CPF inválido</p>}
                 </div>
                 <div>
                   <label className="label">RG</label>
@@ -488,11 +646,35 @@ const ColaboradorForm = () => {
                 </div>
                 <div>
                   <label className="label">Telefone</label>
-                  <input type="tel" name="telefone" value={formData.telefone} onChange={handleChange} className="input-field" placeholder="(00) 00000-0000" />
+                  <input 
+                    type="tel" 
+                    name="telefone" 
+                    value={formData.telefone} 
+                    onChange={handlePhoneChange} 
+                    className="input-field" 
+                    placeholder="(00) 00000-0000"
+                    maxLength={15}
+                  />
                 </div>
                 <div>
                   <label className="label">E-mail</label>
-                  <input type="email" name="email" value={formData.email} onChange={handleChange} className="input-field" />
+                  <div className="relative">
+                    <input 
+                      type="email" 
+                      name="email" 
+                      value={formData.email} 
+                      onChange={handleChange}
+                      onBlur={handleEmailBlur}
+                      className={`input-field ${errors.email ? 'border-red-500' : ''}`}
+                      placeholder="email@exemplo.com"
+                    />
+                    {formData.email && (
+                      <span className={`absolute right-3 top-1/2 -translate-y-1/2 ${errors.email ? 'text-red-500' : 'text-green-500'}`}>
+                        {errors.email ? <AlertCircle className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                      </span>
+                    )}
+                  </div>
+                  {errors.email && <p className="text-red-500 text-xs mt-1">E-mail inválido (ex: nome@email.com)</p>}
                 </div>
               </div>
             </div>
@@ -517,7 +699,23 @@ const ColaboradorForm = () => {
                 </div>
                 <div>
                   <label className="label">CEP</label>
-                  <input type="text" name="cep" value={formData.cep} onChange={handleChange} className="input-field" placeholder="00000-000" />
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      name="cep" 
+                      value={formData.cep} 
+                      onChange={handleCEPChange} 
+                      className="input-field" 
+                      placeholder="00.000-000"
+                      maxLength={10}
+                    />
+                    {loadingCEP && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-500">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Digite o CEP para buscar endereço</p>
                 </div>
               </div>
             </div>
