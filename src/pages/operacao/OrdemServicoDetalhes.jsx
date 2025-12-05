@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { useNavigate, useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Edit, Loader2, Calendar, MapPin, Users, Phone, Mail, Building, Car, Wrench, DollarSign, FileText, Clock, CheckCircle, XCircle, Play, Pause, AlertTriangle, ClipboardCheck, Camera, History, PenTool } from 'lucide-react'
+import { ArrowLeft, Edit, Loader2, Calendar, MapPin, Users, Phone, Mail, Building, Car, Wrench, DollarSign, FileText, Clock, CheckCircle, XCircle, Play, Pause, AlertTriangle, ClipboardCheck, Camera, History, PenTool, Navigation, Paperclip } from 'lucide-react'
 import toast from 'react-hot-toast'
 import OSChecklist from '../../components/OSChecklist'
 import OSFotos from '../../components/OSFotos'
 import OSHistorico from '../../components/OSHistorico'
 import OSAssinaturas from '../../components/OSAssinaturas'
 import OSRelatorio from '../../components/OSRelatorio'
+import OSAnexos from '../../components/OSAnexos'
 
 const OrdemServicoDetalhes = () => {
   const navigate = useNavigate()
@@ -236,7 +237,7 @@ const OrdemServicoDetalhes = () => {
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                 <MapPin className="w-6 h-6 text-green-600" />
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="text-gray-900">{os.endereco || '-'}</p>
                 <p className="text-gray-600">
                   {os.cidade && os.estado ? `${os.cidade}/${os.estado}` : os.cidade || os.estado || '-'}
@@ -244,6 +245,63 @@ const OrdemServicoDetalhes = () => {
                 </p>
               </div>
             </div>
+            
+            {/* Botão Me Leve para a Obra */}
+            {(os.endereco || os.cidade) && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    const endereco = encodeURIComponent(
+                      `${os.endereco || ''}, ${os.cidade || ''}, ${os.estado || ''}, Brasil`
+                    )
+                    // Detecta se é mobile
+                    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+                    
+                    if (isMobile) {
+                      // Tenta abrir o Waze, se não conseguir abre Google Maps
+                      const wazeUrl = `https://waze.com/ul?q=${endereco}&navigate=yes`
+                      window.open(wazeUrl, '_blank')
+                    } else {
+                      // Desktop: abre Google Maps
+                      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${endereco}`
+                      window.open(mapsUrl, '_blank')
+                    }
+                  }}
+                  className="flex-1 sm:flex-none btn-primary bg-green-600 hover:bg-green-700"
+                >
+                  <Navigation className="w-5 h-5" />
+                  Me leve para a obra
+                </button>
+                
+                <button
+                  onClick={() => {
+                    const endereco = encodeURIComponent(
+                      `${os.endereco || ''}, ${os.cidade || ''}, ${os.estado || ''}, Brasil`
+                    )
+                    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${endereco}`
+                    window.open(mapsUrl, '_blank')
+                  }}
+                  className="flex-1 sm:flex-none btn-secondary"
+                >
+                  <MapPin className="w-5 h-5" />
+                  Google Maps
+                </button>
+                
+                <button
+                  onClick={() => {
+                    const endereco = encodeURIComponent(
+                      `${os.endereco || ''}, ${os.cidade || ''}, ${os.estado || ''}, Brasil`
+                    )
+                    const wazeUrl = `https://waze.com/ul?q=${endereco}&navigate=yes`
+                    window.open(wazeUrl, '_blank')
+                  }}
+                  className="flex-1 sm:flex-none btn-secondary"
+                >
+                  <Navigation className="w-5 h-5" />
+                  Waze
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Serviços */}
@@ -359,6 +417,11 @@ const OrdemServicoDetalhes = () => {
               </div>
             </div>
           )}
+
+          {/* Documentos e Instruções */}
+          <div className="card">
+            <OSAnexos ordemServicoId={id} />
+          </div>
 
           {/* Checklist */}
           <div className="card">

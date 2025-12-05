@@ -189,6 +189,7 @@ const ColaboradorForm = () => {
     estado: '',
     cep: '',
     funcao_id: '',
+    tipo_contratacao: 'diarista', // clt, diarista, pj
     data_admissao: '',
     salario: '',
     pix: '',
@@ -214,12 +215,16 @@ const ColaboradorForm = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('funcoes')
-        .select('id, nome')
+        .select('id, nome, valor_diaria, valor_meia_diaria')
         .eq('ativo', true)
         .order('nome')
       return data
     }
   })
+
+  // Obter valor da diária da função selecionada
+  const funcaoSelecionada = funcoes?.find(f => f.id === formData.funcao_id)
+  const valorDiariaFuncao = funcaoSelecionada?.valor_diaria || 0
 
   useEffect(() => {
     if (isEditing) {
@@ -251,6 +256,7 @@ const ColaboradorForm = () => {
         estado: colaborador.estado || '',
         cep: colaborador.cep || '',
         funcao_id: colaborador.funcao_id || '',
+        tipo_contratacao: colaborador.tipo_contratacao || 'diarista',
         data_admissao: colaborador.data_admissao || '',
         salario: formatMoneyFromDB(colaborador.salario),
         pix: colaborador.pix || '',
@@ -474,8 +480,9 @@ const ColaboradorForm = () => {
         estado: formData.estado,
         cep: formData.cep,
         funcao_id: formData.funcao_id || null,
+        tipo_contratacao: formData.tipo_contratacao || 'diarista',
         data_admissao: formData.data_admissao || null,
-        salario: parseMoney(formData.salario),
+        salario: formData.tipo_contratacao === 'clt' ? parseMoney(formData.salario) : null,
         pix: formData.pix,
         banco: formData.banco,
         agencia: formData.agencia,
@@ -785,7 +792,7 @@ const ColaboradorForm = () => {
 
             <div className="card">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Dados Profissionais</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
                   <label className="label">Função</label>
                   <select name="funcao_id" value={formData.funcao_id} onChange={handleChange} className="input-field">
@@ -794,20 +801,50 @@ const ColaboradorForm = () => {
                   </select>
                 </div>
                 <div>
+                  <label className="label">Tipo de Contratação</label>
+                  <select name="tipo_contratacao" value={formData.tipo_contratacao} onChange={handleChange} className="input-field">
+                    <option value="diarista">Diarista</option>
+                    <option value="clt">CLT</option>
+                    <option value="pj">PJ</option>
+                  </select>
+                </div>
+                <div>
                   <label className="label">Data de Admissão</label>
                   <input type="date" name="data_admissao" value={formData.data_admissao} onChange={handleChange} className="input-field" />
                 </div>
-                <div>
-                  <label className="label">Salário</label>
-                  <input 
-                    type="text" 
-                    name="salario" 
-                    value={formData.salario} 
-                    onChange={handleSalarioChange} 
-                    className="input-field" 
-                    placeholder="R$ 0,00"
-                  />
-                </div>
+                
+                {/* Salário para CLT */}
+                {formData.tipo_contratacao === 'clt' && (
+                  <div>
+                    <label className="label">Salário Mensal</label>
+                    <input 
+                      type="text" 
+                      name="salario" 
+                      value={formData.salario} 
+                      onChange={handleSalarioChange} 
+                      className="input-field" 
+                      placeholder="R$ 0,00"
+                    />
+                  </div>
+                )}
+                
+                {/* Valor da Diária para Diarista/PJ */}
+                {(formData.tipo_contratacao === 'diarista' || formData.tipo_contratacao === 'pj') && (
+                  <div>
+                    <label className="label">Valor da Diária</label>
+                    <div className="input-field bg-gray-50 text-gray-700">
+                      {valorDiariaFuncao > 0 
+                        ? formatMoneyFromDB(valorDiariaFuncao)
+                        : formData.funcao_id 
+                          ? 'Não definido na função'
+                          : 'Selecione uma função'
+                      }
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Valor definido na função selecionada
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
