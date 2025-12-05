@@ -5,6 +5,36 @@ import { supabase } from '../../lib/supabase'
 import { ArrowLeft, Save, Loader2, Plus, Trash2, MapPin, Calendar, Users, Wrench, DollarSign, Car } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+// Máscara de Moeda - R$ 0.000,00
+const maskMoney = (value) => {
+  if (!value) return ''
+  let numbers = value.toString().replace(/\D/g, '')
+  if (!numbers) return ''
+  const amount = parseInt(numbers) / 100
+  return amount.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })
+}
+
+const parseMoney = (value) => {
+  if (!value) return null
+  const numbers = value.replace(/[R$\s.]/g, '').replace(',', '.')
+  const parsed = parseFloat(numbers)
+  return isNaN(parsed) ? null : parsed
+}
+
+// Formata número para exibição como moeda
+const formatCurrency = (value) => {
+  if (!value && value !== 0) return 'R$ 0,00'
+  return parseFloat(value).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  })
+}
+
 const OrdemServicoForm = () => {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -127,10 +157,10 @@ const OrdemServicoForm = () => {
         cidade: os.cidade || '',
         estado: os.estado || '',
         cep: os.cep || '',
-        valor_total: os.valor_total || '',
+        valor_total: os.valor_total ? maskMoney((os.valor_total * 100).toString()) : '',
         valor_mao_obra: os.valor_mao_obra || '',
-        valor_materiais: os.valor_materiais || '',
-        valor_deslocamento: os.valor_deslocamento || '',
+        valor_materiais: os.valor_materiais ? maskMoney((os.valor_materiais * 100).toString()) : '',
+        valor_deslocamento: os.valor_deslocamento ? maskMoney((os.valor_deslocamento * 100).toString()) : '',
         status: os.status || 'agendada',
         prioridade: os.prioridade || 'normal',
         observacoes: os.observacoes || '',
@@ -181,6 +211,12 @@ const OrdemServicoForm = () => {
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  // Handlers para valores monetários
+  const handleMoneyChange = (name) => (e) => {
+    const masked = maskMoney(e.target.value)
+    setFormData(prev => ({ ...prev, [name]: masked }))
   }
 
   // Funções para Serviços
@@ -305,10 +341,10 @@ const OrdemServicoForm = () => {
         cidade: formData.cidade,
         estado: formData.estado,
         cep: formData.cep,
-        valor_total: parseFloat(formData.valor_total) || totalServicos,
+        valor_total: parseMoney(formData.valor_total) || totalServicos,
         valor_mao_obra: totalMaoObra,
-        valor_materiais: parseFloat(formData.valor_materiais) || 0,
-        valor_deslocamento: parseFloat(formData.valor_deslocamento) || 0,
+        valor_materiais: parseMoney(formData.valor_materiais) || 0,
+        valor_deslocamento: parseMoney(formData.valor_deslocamento) || 0,
         status: formData.status,
         prioridade: formData.prioridade,
         observacoes: formData.observacoes,
@@ -792,16 +828,37 @@ const OrdemServicoForm = () => {
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Valores</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="label">Valor Materiais (R$)</label>
-                  <input type="number" name="valor_materiais" value={formData.valor_materiais} onChange={handleChange} className="input-field" min="0" step="0.01" />
+                  <label className="label">Valor Materiais</label>
+                  <input 
+                    type="text" 
+                    name="valor_materiais" 
+                    value={formData.valor_materiais} 
+                    onChange={handleMoneyChange('valor_materiais')} 
+                    className="input-field" 
+                    placeholder="R$ 0,00"
+                  />
                 </div>
                 <div>
-                  <label className="label">Valor Deslocamento (R$)</label>
-                  <input type="number" name="valor_deslocamento" value={formData.valor_deslocamento} onChange={handleChange} className="input-field" min="0" step="0.01" />
+                  <label className="label">Valor Deslocamento</label>
+                  <input 
+                    type="text" 
+                    name="valor_deslocamento" 
+                    value={formData.valor_deslocamento} 
+                    onChange={handleMoneyChange('valor_deslocamento')} 
+                    className="input-field" 
+                    placeholder="R$ 0,00"
+                  />
                 </div>
                 <div>
-                  <label className="label">Valor Total da OS (R$)</label>
-                  <input type="number" name="valor_total" value={formData.valor_total} onChange={handleChange} className="input-field" min="0" step="0.01" placeholder={totalServicos.toString()} />
+                  <label className="label">Valor Total da OS</label>
+                  <input 
+                    type="text" 
+                    name="valor_total" 
+                    value={formData.valor_total} 
+                    onChange={handleMoneyChange('valor_total')} 
+                    className="input-field" 
+                    placeholder={formatCurrency(totalServicos)}
+                  />
                 </div>
               </div>
             </div>

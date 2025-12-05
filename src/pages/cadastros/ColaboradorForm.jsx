@@ -91,6 +91,37 @@ const isValidCPF = (cpf) => {
   return true
 }
 
+// Máscara de Moeda - R$ 0.000,00
+const maskMoney = (value) => {
+  if (!value) return ''
+  
+  // Remove tudo que não é número
+  let numbers = value.toString().replace(/\D/g, '')
+  
+  // Se vazio, retorna vazio
+  if (!numbers) return ''
+  
+  // Converte para número e divide por 100 (para centavos)
+  const amount = parseInt(numbers) / 100
+  
+  // Formata como moeda brasileira
+  return amount.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })
+}
+
+// Converte valor formatado para número (para salvar no banco)
+const parseMoney = (value) => {
+  if (!value) return null
+  // Remove R$, pontos e substitui vírgula por ponto
+  const numbers = value.replace(/[R$\s.]/g, '').replace(',', '.')
+  const parsed = parseFloat(numbers)
+  return isNaN(parsed) ? null : parsed
+}
+
 const fetchAddressByCEP = async (cep) => {
   const numbers = cep.replace(/\D/g, '')
   if (numbers.length !== 8) return null
@@ -195,7 +226,7 @@ const ColaboradorForm = () => {
         cep: colaborador.cep || '',
         funcao_id: colaborador.funcao_id || '',
         data_admissao: colaborador.data_admissao || '',
-        salario: colaborador.salario || '',
+        salario: colaborador.salario ? maskMoney((colaborador.salario * 100).toString()) : '',
         pix: colaborador.pix || '',
         banco: colaborador.banco || '',
         agencia: colaborador.agencia || '',
@@ -279,6 +310,12 @@ const ColaboradorForm = () => {
         toast.success('Endereço preenchido automaticamente!')
       }
     }
+  }
+
+  // Handler para Salário com máscara de moeda
+  const handleSalarioChange = (e) => {
+    const masked = maskMoney(e.target.value)
+    setFormData(prev => ({ ...prev, salario: masked }))
   }
 
   // Funções para Certificados
@@ -412,7 +449,7 @@ const ColaboradorForm = () => {
         cep: formData.cep,
         funcao_id: formData.funcao_id || null,
         data_admissao: formData.data_admissao || null,
-        salario: formData.salario ? parseFloat(formData.salario) : null,
+        salario: parseMoney(formData.salario),
         pix: formData.pix,
         banco: formData.banco,
         agencia: formData.agencia,
@@ -735,8 +772,15 @@ const ColaboradorForm = () => {
                   <input type="date" name="data_admissao" value={formData.data_admissao} onChange={handleChange} className="input-field" />
                 </div>
                 <div>
-                  <label className="label">Salário (R$)</label>
-                  <input type="number" name="salario" value={formData.salario} onChange={handleChange} className="input-field" step="0.01" min="0" />
+                  <label className="label">Salário</label>
+                  <input 
+                    type="text" 
+                    name="salario" 
+                    value={formData.salario} 
+                    onChange={handleSalarioChange} 
+                    className="input-field" 
+                    placeholder="R$ 0,00"
+                  />
                 </div>
               </div>
             </div>

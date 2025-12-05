@@ -20,6 +20,27 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+// Máscara de Moeda - R$ 0.000,00
+const maskMoney = (value) => {
+  if (!value) return ''
+  let numbers = value.toString().replace(/\D/g, '')
+  if (!numbers) return ''
+  const amount = parseInt(numbers) / 100
+  return amount.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })
+}
+
+const parseMoney = (value) => {
+  if (!value) return null
+  const numbers = value.replace(/[R$\s.]/g, '').replace(',', '.')
+  const parsed = parseFloat(numbers)
+  return isNaN(parsed) ? null : parsed
+}
+
 const LancamentoForm = () => {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -137,7 +158,7 @@ const LancamentoForm = () => {
       setFormData({
         tipo: lancamento.tipo || 'despesa',
         descricao: lancamento.descricao || '',
-        valor: lancamento.valor || '',
+        valor: lancamento.valor ? maskMoney((lancamento.valor * 100).toString()) : '',
         data_vencimento: lancamento.data_vencimento || '',
         data_pagamento: lancamento.data_pagamento || '',
         data_competencia: lancamento.data_competencia || '',
@@ -161,7 +182,7 @@ const LancamentoForm = () => {
     mutationFn: async (dados) => {
       const payload = {
         ...dados,
-        valor: parseFloat(dados.valor) || 0,
+        valor: parseMoney(dados.valor) || 0,
         conta_bancaria_id: dados.conta_bancaria_id || null,
         categoria_id: dados.categoria_id || null,
         forma_pagamento_id: dados.forma_pagamento_id || null,
@@ -264,6 +285,11 @@ const LancamentoForm = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }))
+  }
+
+  const handleValorChange = (e) => {
+    const masked = maskMoney(e.target.value)
+    setFormData(prev => ({ ...prev, valor: masked }))
   }
 
   const categoriasFiltradas = categorias?.filter(c => c.tipo === formData.tipo) || []
@@ -382,20 +408,15 @@ const LancamentoForm = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Valor *
               </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">R$</span>
-                <input
-                  type="number"
-                  name="valor"
-                  value={formData.valor}
-                  onChange={handleChange}
-                  className="input pl-10"
-                  placeholder="0,00"
-                  step="0.01"
-                  min="0"
-                  required
-                />
-              </div>
+              <input
+                type="text"
+                name="valor"
+                value={formData.valor}
+                onChange={handleValorChange}
+                className="input"
+                placeholder="R$ 0,00"
+                required
+              />
             </div>
 
             <div>

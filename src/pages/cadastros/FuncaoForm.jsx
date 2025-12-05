@@ -11,6 +11,27 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+// Máscara de Moeda - R$ 0.000,00
+const maskMoney = (value) => {
+  if (!value) return ''
+  let numbers = value.toString().replace(/\D/g, '')
+  if (!numbers) return ''
+  const amount = parseInt(numbers) / 100
+  return amount.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })
+}
+
+const parseMoney = (value) => {
+  if (!value) return null
+  const numbers = value.replace(/[R$\s.]/g, '').replace(',', '.')
+  const parsed = parseFloat(numbers)
+  return isNaN(parsed) ? null : parsed
+}
+
 const FuncaoForm = () => {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -45,8 +66,8 @@ const FuncaoForm = () => {
       setFormData({
         nome: funcao.nome || '',
         descricao: funcao.descricao || '',
-        valor_diaria: funcao.valor_diaria || '',
-        valor_meia_diaria: funcao.valor_meia_diaria || ''
+        valor_diaria: funcao.valor_diaria ? maskMoney((funcao.valor_diaria * 100).toString()) : '',
+        valor_meia_diaria: funcao.valor_meia_diaria ? maskMoney((funcao.valor_meia_diaria * 100).toString()) : ''
       })
     }
   }, [funcao])
@@ -57,8 +78,8 @@ const FuncaoForm = () => {
       const payload = {
         nome: dados.nome,
         descricao: dados.descricao || null,
-        valor_diaria: dados.valor_diaria ? parseFloat(dados.valor_diaria) : 0,
-        valor_meia_diaria: dados.valor_meia_diaria ? parseFloat(dados.valor_meia_diaria) : 0
+        valor_diaria: parseMoney(dados.valor_diaria) || 0,
+        valor_meia_diaria: parseMoney(dados.valor_meia_diaria) || 0
       }
 
       if (isEdicao) {
@@ -100,56 +121,35 @@ const FuncaoForm = () => {
       navigate('/funcoes')
     },
     onError: (error) => {
-      console.error('Erro ao excluir:', error)
-      toast.error('Erro ao excluir. Verifique se não há colaboradores vinculados.')
+      toast.error('Erro ao excluir: ' + error.message)
     }
   })
+
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  // Handler para valores monetários
+  const handleMoneyChange = (name) => (e) => {
+    const masked = maskMoney(e.target.value)
+    setFormData(prev => ({ ...prev, [name]: masked }))
+  }
 
   const handleSubmit = (e) => {
     e.preventDefault()
     
     if (!formData.nome.trim()) {
-      toast.error('Nome da função é obrigatório')
+      toast.error('Nome é obrigatório')
       return
     }
 
     salvarMutation.mutate(formData)
   }
 
-  const handleChange = (e) => {
-    const { name, value } = e.target
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }))
-  }
-
-  const handleValorChange = (e, campo) => {
-    let valor = e.target.value.replace(/[^\d,]/g, '')
-    valor = valor.replace(',', '.')
-    setFormData(prev => ({
-      ...prev,
-      [campo]: valor
-    }))
-  }
-
-  const formatarMoeda = (valor) => {
-    if (!valor) return ''
-    const numero = parseFloat(valor)
-    if (isNaN(numero)) return ''
-    return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-  }
-
-  // Calcular meia diária automaticamente
-  const calcularMeiaDiaria = () => {
-    if (formData.valor_diaria) {
-      const diaria = parseFloat(formData.valor_diaria)
-      if (!isNaN(diaria)) {
-        setFormData(prev => ({
-          ...prev,
-          valor_meia_diaria: (diaria / 2).toFixed(2)
-        }))
-      }
+  const handleExcluir = () => {
+    if (window.confirm('Tem certeza que deseja excluir esta função?')) {
+      excluirMutation.mutate()
     }
   }
 
@@ -166,126 +166,126 @@ const FuncaoForm = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/funcoes')} className="p-2 hover:bg-gray-100 rounded-lg">
+          <button 
+            onClick={() => navigate('/funcoes')} 
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">
               {isEdicao ? 'Editar Função' : 'Nova Função'}
             </h1>
-            <p className="text-gray-600">Preencha os dados da função</p>
+            <p className="text-gray-600">
+              {isEdicao ? 'Atualize os dados da função' : 'Cadastre uma nova função'}
+            </p>
           </div>
         </div>
+
         {isEdicao && (
           <button
-            onClick={() => {
-              if (confirm('Deseja excluir esta função?')) {
-                excluirMutation.mutate()
-              }
-            }}
+            onClick={handleExcluir}
             disabled={excluirMutation.isPending}
-            className="btn btn-secondary text-red-600 hover:bg-red-50"
+            className="btn-danger"
           >
-            <Trash2 className="w-4 h-4" />
+            {excluirMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Trash2 className="w-4 h-4" />
+            )}
+            Excluir
           </button>
         )}
       </div>
 
+      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Dados da Função */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Briefcase className="w-5 h-5" />
-            Dados da Função
-          </h3>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nome da Função *
-              </label>
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Briefcase className="w-5 h-5 text-blue-600" />
+            </div>
+            <h2 className="text-lg font-semibold text-gray-900">Dados da Função</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="md:col-span-2">
+              <label className="label">Nome da Função *</label>
               <input
                 type="text"
                 name="nome"
                 value={formData.nome}
                 onChange={handleChange}
-                className="input"
-                placeholder="Ex: Eletricista, Instalador, Motorista..."
+                className="input-field"
+                placeholder="Ex: Eletricista, Técnico Solar, Instalador..."
                 required
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Descrição
-              </label>
+            <div className="md:col-span-2">
+              <label className="label">Descrição</label>
               <textarea
                 name="descricao"
                 value={formData.descricao}
                 onChange={handleChange}
-                className="input"
                 rows={3}
+                className="input-field"
                 placeholder="Descreva as responsabilidades e atividades desta função..."
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Valor da Diária (R$)
-                </label>
-                <input
-                  type="text"
-                  value={formData.valor_diaria ? `R$ ${formData.valor_diaria}` : ''}
-                  onChange={(e) => handleValorChange(e, 'valor_diaria')}
-                  onBlur={calcularMeiaDiaria}
-                  className="input"
-                  placeholder="R$ 0,00"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Valor padrão da diária para esta função
-                </p>
-              </div>
+            <div>
+              <label className="label">Valor da Diária</label>
+              <input
+                type="text"
+                name="valor_diaria"
+                value={formData.valor_diaria}
+                onChange={handleMoneyChange('valor_diaria')}
+                className="input-field"
+                placeholder="R$ 0,00"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Valor padrão da diária completa
+              </p>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Valor da Meia Diária (R$)
-                </label>
-                <input
-                  type="text"
-                  value={formData.valor_meia_diaria ? `R$ ${formData.valor_meia_diaria}` : ''}
-                  onChange={(e) => handleValorChange(e, 'valor_meia_diaria')}
-                  className="input"
-                  placeholder="R$ 0,00"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Calculado automaticamente como metade da diária
-                </p>
-              </div>
+            <div>
+              <label className="label">Valor da Meia Diária</label>
+              <input
+                type="text"
+                name="valor_meia_diaria"
+                value={formData.valor_meia_diaria}
+                onChange={handleMoneyChange('valor_meia_diaria')}
+                className="input-field"
+                placeholder="R$ 0,00"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Valor padrão da meia diária
+              </p>
             </div>
           </div>
         </div>
 
         {/* Botões */}
-        <div className="flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={() => navigate('/funcoes')}
-            className="btn btn-secondary"
+        <div className="flex gap-3 justify-end">
+          <button 
+            type="button" 
+            onClick={() => navigate('/funcoes')} 
+            className="btn-secondary"
           >
             Cancelar
           </button>
-          <button
-            type="submit"
+          <button 
+            type="submit" 
             disabled={salvarMutation.isPending}
-            className="btn btn-primary flex items-center gap-2"
+            className="btn-primary"
           >
             {salvarMutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
-              <Save className="w-4 h-4" />
+              <Save className="w-5 h-5" />
             )}
-            Salvar
+            {salvarMutation.isPending ? 'Salvando...' : 'Salvar'}
           </button>
         </div>
       </form>

@@ -15,6 +15,27 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+// Máscara de Moeda - R$ 0.000,00
+const maskMoney = (value) => {
+  if (!value) return ''
+  let numbers = value.toString().replace(/\D/g, '')
+  if (!numbers) return ''
+  const amount = parseInt(numbers) / 100
+  return amount.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })
+}
+
+const parseMoney = (value) => {
+  if (!value) return null
+  const numbers = value.replace(/[R$\s.]/g, '').replace(',', '.')
+  const parsed = parseFloat(numbers)
+  return isNaN(parsed) ? null : parsed
+}
+
 const Servicos = () => {
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
@@ -207,11 +228,16 @@ const ServicoModal = ({ servico, onClose, onSave }) => {
     nome: servico?.nome || '',
     codigo: servico?.codigo || '',
     descricao: servico?.descricao || '',
-    valor_base: servico?.valor_base || '',
+    valor_base: servico?.valor_base ? maskMoney((servico.valor_base * 100).toString()) : '',
     unidade: servico?.unidade || 'unidade',
     duracao_estimada: servico?.duracao_estimada || '',
     observacoes: servico?.observacoes || ''
   })
+
+  const handleValorChange = (e) => {
+    const masked = maskMoney(e.target.value)
+    setFormData({ ...formData, valor_base: masked })
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -226,7 +252,7 @@ const ServicoModal = ({ servico, onClose, onSave }) => {
     try {
       const dataToSave = {
         ...formData,
-        valor_base: formData.valor_base ? parseFloat(formData.valor_base) : null,
+        valor_base: parseMoney(formData.valor_base),
         duracao_estimada: formData.duracao_estimada ? parseFloat(formData.duracao_estimada) : null
       }
 
@@ -288,15 +314,13 @@ const ServicoModal = ({ servico, onClose, onSave }) => {
               />
             </div>
             <div>
-              <label className="label">Valor Base (R$)</label>
+              <label className="label">Valor Base</label>
               <input
-                type="number"
+                type="text"
                 value={formData.valor_base}
-                onChange={(e) => setFormData({ ...formData, valor_base: e.target.value })}
+                onChange={handleValorChange}
                 className="input-field"
-                placeholder="0,00"
-                step="0.01"
-                min="0"
+                placeholder="R$ 0,00"
               />
             </div>
             <div>
