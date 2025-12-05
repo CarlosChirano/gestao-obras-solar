@@ -9,10 +9,12 @@ import {
   User,
   Shield,
   ShieldCheck,
-  Key,
+  Mail,
   Check,
   X,
-  AlertTriangle
+  AlertTriangle,
+  Send,
+  CheckCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -30,7 +32,9 @@ const UsuarioForm = () => {
     pode_acessar_sistema: true
   })
 
-  const [criarCredenciais, setCriarCredenciais] = useState(false)
+  const [enviarConvite, setEnviarConvite] = useState(false)
+  const [enviandoConvite, setEnviandoConvite] = useState(false)
+  const [conviteEnviado, setConviteEnviado] = useState(false)
 
   // Buscar colaborador existente
   const { data: colaborador, isLoading: loadingColaborador } = useQuery({
@@ -93,6 +97,61 @@ const UsuarioForm = () => {
     }
   }, [colaborador])
 
+  // Função para enviar convite
+  const enviarConviteEmail = async () => {
+    if (!formData.email_login) {
+      toast.error('Configure o email de login primeiro')
+      return
+    }
+
+    setEnviandoConvite(true)
+    try {
+      // Primeiro, tenta criar o usuário no Supabase Auth
+      // Usa uma senha aleatória temporária
+      const senhaTemporaria = Math.random().toString(36).slice(-12) + 'A1!'
+      
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: formData.email_login,
+        password: senhaTemporaria,
+        options: {
+          emailRedirectTo: `${window.location.origin}/aceitar-convite`,
+          data: {
+            nome: formData.nome,
+            colaborador_id: id
+          }
+        }
+      })
+
+      // Se o usuário já existe, enviamos reset de senha
+      if (signUpError && signUpError.message.includes('already registered')) {
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+          formData.email_login,
+          {
+            redirectTo: `${window.location.origin}/redefinir-senha`,
+          }
+        )
+        
+        if (resetError) throw resetError
+        
+        toast.success('Email de acesso enviado! O usuário pode redefinir a senha.')
+        setConviteEnviado(true)
+        return
+      }
+
+      if (signUpError) throw signUpError
+
+      // Sucesso ao criar usuário - email de confirmação será enviado automaticamente
+      toast.success('Convite enviado! O usuário receberá um email para ativar a conta.')
+      setConviteEnviado(true)
+
+    } catch (error) {
+      console.error('Erro ao enviar convite:', error)
+      toast.error('Erro ao enviar convite: ' + error.message)
+    } finally {
+      setEnviandoConvite(false)
+    }
+  }
+
   // Mutation para salvar
   const salvarMutation = useMutation({
     mutationFn: async (dados) => {
@@ -106,6 +165,11 @@ const UsuarioForm = () => {
         .eq('id', id)
 
       if (error) throw error
+
+      // Se marcou para enviar convite, envia
+      if (enviarConvite && !conviteEnviado) {
+        await enviarConviteEmail()
+      }
     },
     onSuccess: () => {
       toast.success('Acesso configurado!')
@@ -397,48 +461,62 @@ const UsuarioForm = () => {
           </div>
         )}
 
-        {/* Credenciais */}
+        {/* Enviar Convite */}
         <div className="card">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Key className="w-5 h-5" />
-            Credenciais de Acesso
+            <Mail className="w-5 h-5" />
+            Acesso ao Sistema
           </h3>
 
-          <div className="p-4 bg-yellow-50 rounded-lg mb-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+          {conviteEnviado ? (
+            <div className="flex items-center gap-3 p-4 bg-green-50 rounded-lg text-green-700">
+              <CheckCircle className="w-5 h-5" />
               <div>
-                <p className="text-yellow-800 font-medium">Informação sobre login</p>
-                <p className="text-yellow-700 text-sm mt-1">
-                  O usuário usará o email de login configurado acima para acessar o sistema.
-                  As credenciais são gerenciadas pelo Supabase Authentication.
-                </p>
+                <p className="font-medium">Convite enviado!</p>
+                <p className="text-sm">O usuário receberá um email em <strong>{formData.email_login}</strong> para configurar o acesso.</p>
               </div>
             </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                id="criar_credenciais"
-                checked={criarCredenciais}
-                onChange={(e) => setCriarCredenciais(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300"
-              />
-              <label htmlFor="criar_credenciais" className="text-sm font-medium text-gray-700">
-                Enviar convite por email para criar senha
-              </label>
-            </div>
-
-            {criarCredenciais && (
-              <div className="p-4 bg-blue-50 rounded-lg">
+          ) : (
+            <>
+              <div className="p-4 bg-blue-50 rounded-lg mb-4">
                 <p className="text-blue-800 text-sm">
-                  Um email será enviado para <strong>{formData.email_login}</strong> com um link para criar a senha de acesso.
+                  Para o colaborador acessar o sistema, você precisa enviar um convite por email.
+                  Ele receberá um link para criar sua senha.
                 </p>
               </div>
-            )}
-          </div>
+
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="enviar_convite"
+                    checked={enviarConvite}
+                    onChange={(e) => setEnviarConvite(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300"
+                  />
+                  <label htmlFor="enviar_convite" className="text-sm font-medium text-gray-700">
+                    Enviar convite ao salvar
+                  </label>
+                </div>
+
+                <span className="text-gray-400">ou</span>
+
+                <button
+                  type="button"
+                  onClick={enviarConviteEmail}
+                  disabled={enviandoConvite || !formData.email_login}
+                  className="btn btn-secondary flex items-center gap-2"
+                >
+                  {enviandoConvite ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                  Enviar Convite Agora
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Botões */}

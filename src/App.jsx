@@ -8,6 +8,8 @@ import MainLayout from './layouts/MainLayout'
 
 // Auth
 import Login from './pages/auth/Login'
+import RedefinirSenha from './pages/auth/RedefinirSenha'
+import AceitarConvite from './pages/auth/AceitarConvite'
 
 // Dashboard
 import Dashboard from './pages/Dashboard'
@@ -102,6 +104,10 @@ function App() {
                 <Login />
               </PublicRoute>
             } />
+            
+            {/* Rotas de Recuperação/Convite (públicas mas sem redirect) */}
+            <Route path="/redefinir-senha" element={<RedefinirSenha />} />
+            <Route path="/aceitar-convite" element={<AceitarConvite />} />
 
             {/* Rotas Privadas */}
             <Route path="/" element={
@@ -311,4 +317,3 @@ function App() {
 }
 
 export default App
-// deploy trigger
