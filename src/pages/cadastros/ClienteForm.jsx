@@ -974,9 +974,9 @@ const ClienteForm = () => {
       {/* MODAL DE ENDEREÇO DE OBRA */}
       {showEnderecoModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+          <div style={{maxWidth: "800px"}} className="bg-white rounded-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
             {/* Header */}
-            <div className="sticky top-0 bg-white px-10 py-6 border-b flex items-center justify-between z-10">
+            <div style={{padding: "24px 40px"}} className="sticky top-0 bg-white border-b flex items-center justify-between z-10">
               <h3 className="text-xl font-semibold text-gray-900">
                 {enderecoEditando ? 'Editar Endereço de Obra' : 'Novo Endereço de Obra'}
               </h3>
@@ -988,7 +988,7 @@ const ClienteForm = () => {
               </button>
             </div>
 
-            <div className="px-10 py-8 space-y-7">
+            <div style={{padding: "32px 40px"}} className="space-y-7">
               {/* Nome do Local */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1217,7 +1217,7 @@ const ClienteForm = () => {
             </div>
 
             {/* Footer */}
-            <div className="sticky bottom-0 bg-gray-50 px-10 py-5 border-t flex gap-4 justify-center">
+            <div style={{padding: "20px 40px"}} className="sticky bottom-0 bg-gray-50 border-t flex gap-4 justify-center">
               <button
                 type="button"
                 onClick={() => setShowEnderecoModal(false)}
