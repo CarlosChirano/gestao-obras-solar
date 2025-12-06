@@ -34,6 +34,7 @@ import Servicos from './pages/cadastros/Servicos'
 import Veiculos from './pages/cadastros/Veiculos'
 import EmpresasContratantes from './pages/cadastros/EmpresasContratantes'
 import ChecklistModelos from './pages/cadastros/ChecklistModelos'
+import MotivosPausa from './pages/cadastros/MotivosPausa'
 
 // Financeiro
 import Financeiro from './pages/financeiro/Financeiro'
@@ -297,6 +298,13 @@ function App() {
               </PrivateRoute>
             } />
 
+            {/* Motivos de Pausa */}
+            <Route path="/motivos-pausa" element={
+              <PrivateRoute>
+                <MotivosPausa />
+              </PrivateRoute>
+            } />
+
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
@@ -317,4 +325,3 @@ function App() {
 }
 
 export default App
-// deploy Sex  5 Dez 2025 15:07:16 -04

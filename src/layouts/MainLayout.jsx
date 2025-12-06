@@ -20,7 +20,8 @@ import {
   ChevronDown,
   Sun,
   DollarSign,
-  ShieldCheck
+  ShieldCheck,
+  PauseCircle
 } from 'lucide-react'
 
 const MainLayout = ({ children }) => {
@@ -72,6 +73,7 @@ const MainLayout = ({ children }) => {
     { label: 'Veículos', icon: Car, path: '/veiculos' },
     { label: 'Empresas', icon: Building, path: '/empresas-contratantes' },
     { label: 'Checklists', icon: FileText, path: '/checklist-modelos' },
+    { label: 'Motivos de Pausa', icon: PauseCircle, path: '/motivos-pausa' },
   ]
 
   const isActive = (path) => {
