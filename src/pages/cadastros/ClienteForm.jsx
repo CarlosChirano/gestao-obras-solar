@@ -974,22 +974,26 @@ const ClienteForm = () => {
       {/* MODAL DE ENDEREÇO DE OBRA */}
       {showEnderecoModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white px-6 py-4 border-b flex items-center justify-between">
-              <h3 className="text-lg font-semibold">
+          <div className="bg-white rounded-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="sticky top-0 bg-white px-6 py-4 border-b flex items-center justify-between z-10">
+              <h3 className="text-lg font-semibold text-gray-900">
                 {enderecoEditando ? 'Editar Endereço de Obra' : 'Novo Endereço de Obra'}
               </h3>
               <button
                 onClick={() => setShowEnderecoModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-5">
+              {/* Nome do Local */}
               <div>
-                <label className="label">Nome do Local *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nome do Local <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   name="nome"
@@ -1000,9 +1004,16 @@ const ClienteForm = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label">CEP</label>
+              {/* Seção: Endereço */}
+              <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+                <h4 className="text-sm font-medium text-gray-600 flex items-center gap-2">
+                  <MapPin className="w-4 h-4" />
+                  Endereço
+                </h4>
+                
+                {/* CEP */}
+                <div className="max-w-[180px]">
+                  <label className="block text-sm text-gray-600 mb-1">CEP</label>
                   <div className="relative">
                     <input
                       type="text"
@@ -1020,134 +1031,139 @@ const ClienteForm = () => {
                     )}
                   </div>
                 </div>
-                <div></div>
+
+                {/* Endereço + Número */}
+                <div className="grid grid-cols-4 gap-3">
+                  <div className="col-span-3">
+                    <label className="block text-sm text-gray-600 mb-1">Endereço</label>
+                    <input
+                      type="text"
+                      name="endereco"
+                      value={enderecoForm.endereco}
+                      onChange={handleEnderecoChange}
+                      className="input-field"
+                      placeholder="Rua, Avenida..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Nº</label>
+                    <input
+                      type="text"
+                      name="numero"
+                      value={enderecoForm.numero}
+                      onChange={handleEnderecoChange}
+                      className="input-field"
+                      placeholder="123"
+                    />
+                  </div>
+                </div>
+
+                {/* Complemento + Bairro */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Complemento</label>
+                    <input
+                      type="text"
+                      name="complemento"
+                      value={enderecoForm.complemento}
+                      onChange={handleEnderecoChange}
+                      className="input-field"
+                      placeholder="Bloco, Sala..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Bairro</label>
+                    <input
+                      type="text"
+                      name="bairro"
+                      value={enderecoForm.bairro}
+                      onChange={handleEnderecoChange}
+                      className="input-field"
+                    />
+                  </div>
+                </div>
+
+                {/* Cidade + Estado */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <label className="block text-sm text-gray-600 mb-1">Cidade</label>
+                    <input
+                      type="text"
+                      name="cidade"
+                      value={enderecoForm.cidade}
+                      onChange={handleEnderecoChange}
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Estado</label>
+                    <select
+                      name="estado"
+                      value={enderecoForm.estado}
+                      onChange={handleEnderecoChange}
+                      className="input-field"
+                    >
+                      <option value="">UF</option>
+                      {estados.map(uf => (
+                        <option key={uf} value={uf}>{uf}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2">
-                  <label className="label">Endereço</label>
-                  <input
-                    type="text"
-                    name="endereco"
-                    value={enderecoForm.endereco}
-                    onChange={handleEnderecoChange}
-                    className="input-field"
-                    placeholder="Rua, Avenida..."
-                  />
-                </div>
-                <div>
-                  <label className="label">Número</label>
-                  <input
-                    type="text"
-                    name="numero"
-                    value={enderecoForm.numero}
-                    onChange={handleEnderecoChange}
-                    className="input-field"
-                    placeholder="123"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Complemento</label>
-                  <input
-                    type="text"
-                    name="complemento"
-                    value={enderecoForm.complemento}
-                    onChange={handleEnderecoChange}
-                    className="input-field"
-                    placeholder="Bloco, Sala, Galpão..."
-                  />
-                </div>
-                <div>
-                  <label className="label">Bairro</label>
-                  <input
-                    type="text"
-                    name="bairro"
-                    value={enderecoForm.bairro}
-                    onChange={handleEnderecoChange}
-                    className="input-field"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Cidade</label>
-                  <input
-                    type="text"
-                    name="cidade"
-                    value={enderecoForm.cidade}
-                    onChange={handleEnderecoChange}
-                    className="input-field"
-                  />
-                </div>
-                <div>
-                  <label className="label">Estado</label>
-                  <select
-                    name="estado"
-                    value={enderecoForm.estado}
-                    onChange={handleEnderecoChange}
-                    className="input-field"
-                  >
-                    <option value="">Selecione...</option>
-                    {estados.map(uf => (
-                      <option key={uf} value={uf}>{uf}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Coordenadas GPS */}
-              <div className="pt-4 border-t">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="label mb-0 flex items-center gap-2">
-                    <Navigation className="w-4 h-4 text-blue-600" />
+              {/* Seção: Coordenadas GPS */}
+              <div className="bg-blue-50 rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium text-blue-800 flex items-center gap-2">
+                    <Navigation className="w-4 h-4" />
                     Coordenadas GPS
-                  </label>
+                  </h4>
                   <button
                     type="button"
                     onClick={getMyLocation}
-                    className="btn-secondary text-xs"
+                    className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
                   >
-                    <MapPin className="w-4 h-4" />
+                    <MapPin className="w-3 h-3" />
                     Usar minha localização
                   </button>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="label text-sm">Latitude</label>
+                    <label className="block text-xs text-blue-700 mb-1">Latitude</label>
                     <input
                       type="text"
                       name="latitude"
                       value={enderecoForm.latitude}
                       onChange={handleEnderecoChange}
-                      className="input-field"
+                      className="input-field bg-white"
                       placeholder="-23.550520"
                     />
                   </div>
                   <div>
-                    <label className="label text-sm">Longitude</label>
+                    <label className="block text-xs text-blue-700 mb-1">Longitude</label>
                     <input
                       type="text"
                       name="longitude"
                       value={enderecoForm.longitude}
                       onChange={handleEnderecoChange}
-                      className="input-field"
+                      className="input-field bg-white"
                       placeholder="-46.633308"
                     />
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Coordenadas precisas facilitam a navegação da equipe
+                <p className="text-xs text-blue-600">
+                  📍 Coordenadas precisas facilitam a navegação da equipe até o local
                 </p>
               </div>
 
-              {/* Referência e Contato */}
-              <div className="pt-4 border-t">
+              {/* Seção: Informações Adicionais */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-gray-600">Informações Adicionais</h4>
+                
                 <div>
-                  <label className="label">Ponto de Referência</label>
+                  <label className="block text-sm text-gray-600 mb-1">Ponto de Referência</label>
                   <input
                     type="text"
                     name="referencia"
@@ -1158,20 +1174,20 @@ const ClienteForm = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mt-4">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="label">Contato no Local</label>
+                    <label className="block text-sm text-gray-600 mb-1">Contato no Local</label>
                     <input
                       type="text"
                       name="contato_local"
                       value={enderecoForm.contato_local}
                       onChange={handleEnderecoChange}
                       className="input-field"
-                      placeholder="Nome da pessoa responsável"
+                      placeholder="Nome do responsável"
                     />
                   </div>
                   <div>
-                    <label className="label">Telefone do Contato</label>
+                    <label className="block text-sm text-gray-600 mb-1">Telefone</label>
                     <input
                       type="text"
                       name="telefone_local"
@@ -1183,21 +1199,22 @@ const ClienteForm = () => {
                     />
                   </div>
                 </div>
+
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Observações</label>
+                  <textarea
+                    name="observacoes"
+                    value={enderecoForm.observacoes}
+                    onChange={handleEnderecoChange}
+                    rows={2}
+                    className="input-field resize-none"
+                    placeholder="Informações adicionais sobre o local..."
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="label">Observações</label>
-                <textarea
-                  name="observacoes"
-                  value={enderecoForm.observacoes}
-                  onChange={handleEnderecoChange}
-                  rows={2}
-                  className="input-field"
-                  placeholder="Informações adicionais sobre o local..."
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
+              {/* Checkbox Principal */}
+              <div className="flex items-center gap-2 pt-2">
                 <input
                   type="checkbox"
                   id="is_principal"
@@ -1206,12 +1223,14 @@ const ClienteForm = () => {
                   onChange={handleEnderecoChange}
                   className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
-                <label htmlFor="is_principal" className="text-sm text-gray-700">
+                <label htmlFor="is_principal" className="text-sm text-gray-700 flex items-center gap-1">
+                  <Star className="w-4 h-4 text-yellow-500" />
                   Definir como endereço principal
                 </label>
               </div>
             </div>
 
+            {/* Footer */}
             <div className="sticky bottom-0 bg-gray-50 px-6 py-4 border-t flex gap-3 justify-end">
               <button
                 type="button"
