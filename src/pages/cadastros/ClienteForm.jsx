@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Save, Loader2, AlertCircle, Check } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, AlertCircle, Check, Plus, Trash2, MapPin, Edit, Navigation, Star, X, Building2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 // ============================================
@@ -171,6 +171,29 @@ const ClienteForm = () => {
     observacoes: ''
   })
 
+  // Estado para endereços de obras
+  const [enderecos, setEnderecos] = useState([])
+  const [showEnderecoModal, setShowEnderecoModal] = useState(false)
+  const [enderecoEditando, setEnderecoEditando] = useState(null)
+  const [loadingCEPEndereco, setLoadingCEPEndereco] = useState(false)
+  const [enderecoForm, setEnderecoForm] = useState({
+    nome: '',
+    endereco: '',
+    numero: '',
+    complemento: '',
+    bairro: '',
+    cidade: '',
+    estado: '',
+    cep: '',
+    latitude: '',
+    longitude: '',
+    referencia: '',
+    contato_local: '',
+    telefone_local: '',
+    observacoes: '',
+    is_principal: false
+  })
+
   useEffect(() => {
     if (isEditing) {
       loadCliente()
@@ -180,6 +203,7 @@ const ClienteForm = () => {
   const loadCliente = async () => {
     setLoadingData(true)
     try {
+      // Carregar cliente
       const { data, error } = await supabase
         .from('clientes')
         .select('*')
@@ -201,6 +225,19 @@ const ClienteForm = () => {
         cep: data.cep || '',
         observacoes: data.observacoes || ''
       })
+
+      // Carregar endereços de obras
+      const { data: enderecosData, error: enderecosError } = await supabase
+        .from('cliente_enderecos')
+        .select('*')
+        .eq('cliente_id', id)
+        .eq('ativo', true)
+        .order('is_principal', { ascending: false })
+        .order('nome')
+
+      if (!enderecosError) {
+        setEnderecos(enderecosData || [])
+      }
     } catch (error) {
       toast.error('Erro ao carregar cliente')
       navigate('/clientes')
@@ -214,12 +251,10 @@ const ClienteForm = () => {
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
-  // Handler para CPF/CNPJ com máscara
   const handleCPFCNPJChange = (e) => {
     const masked = maskCPFCNPJ(e.target.value, formData.tipo_pessoa)
     setFormData(prev => ({ ...prev, cpf_cnpj: masked }))
     
-    // Validação
     const isComplete = formData.tipo_pessoa === 'juridica' 
       ? masked.length === 18 
       : masked.length === 14
@@ -234,13 +269,11 @@ const ClienteForm = () => {
     }
   }
 
-  // Handler para Telefone com máscara
   const handlePhoneChange = (e) => {
     const masked = maskPhone(e.target.value)
     setFormData(prev => ({ ...prev, telefone: masked }))
   }
 
-  // Handler para Email com validação
   const handleEmailBlur = () => {
     if (formData.email && !isValidEmail(formData.email)) {
       setErrors(prev => ({ ...prev, email: true }))
@@ -249,12 +282,10 @@ const ClienteForm = () => {
     }
   }
 
-  // Handler para CEP com máscara e busca automática
   const handleCEPChange = async (e) => {
     const masked = maskCEP(e.target.value)
     setFormData(prev => ({ ...prev, cep: masked }))
     
-    // Busca automática quando CEP completo
     if (masked.replace(/\D/g, '').length === 8) {
       setLoadingCEP(true)
       const address = await fetchAddressByCEP(masked)
@@ -272,16 +303,240 @@ const ClienteForm = () => {
     }
   }
 
-  // Quando muda o tipo de pessoa, limpa e reformata o CPF/CNPJ
   const handleTipoPessoaChange = (e) => {
     const novoTipo = e.target.value
     setFormData(prev => ({ 
       ...prev, 
       tipo_pessoa: novoTipo,
-      cpf_cnpj: '' // Limpa o campo ao mudar o tipo
+      cpf_cnpj: ''
     }))
     setErrors(prev => ({ ...prev, cpf_cnpj: false }))
   }
+
+  // ============================================
+  // FUNÇÕES PARA ENDEREÇOS DE OBRAS
+  // ============================================
+
+  const openEnderecoModal = (endereco = null) => {
+    if (endereco) {
+      setEnderecoEditando(endereco)
+      setEnderecoForm({
+        nome: endereco.nome || '',
+        endereco: endereco.endereco || '',
+        numero: endereco.numero || '',
+        complemento: endereco.complemento || '',
+        bairro: endereco.bairro || '',
+        cidade: endereco.cidade || '',
+        estado: endereco.estado || '',
+        cep: endereco.cep || '',
+        latitude: endereco.latitude || '',
+        longitude: endereco.longitude || '',
+        referencia: endereco.referencia || '',
+        contato_local: endereco.contato_local || '',
+        telefone_local: endereco.telefone_local || '',
+        observacoes: endereco.observacoes || '',
+        is_principal: endereco.is_principal || false
+      })
+    } else {
+      setEnderecoEditando(null)
+      setEnderecoForm({
+        nome: '',
+        endereco: '',
+        numero: '',
+        complemento: '',
+        bairro: '',
+        cidade: '',
+        estado: '',
+        cep: '',
+        latitude: '',
+        longitude: '',
+        referencia: '',
+        contato_local: '',
+        telefone_local: '',
+        observacoes: '',
+        is_principal: enderecos.length === 0
+      })
+    }
+    setShowEnderecoModal(true)
+  }
+
+  const handleEnderecoChange = (e) => {
+    const { name, value, type, checked } = e.target
+    setEnderecoForm(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }))
+  }
+
+  const handleEnderecoCEPChange = async (e) => {
+    const masked = maskCEP(e.target.value)
+    setEnderecoForm(prev => ({ ...prev, cep: masked }))
+    
+    if (masked.replace(/\D/g, '').length === 8) {
+      setLoadingCEPEndereco(true)
+      const address = await fetchAddressByCEP(masked)
+      setLoadingCEPEndereco(false)
+      
+      if (address) {
+        setEnderecoForm(prev => ({
+          ...prev,
+          endereco: address.endereco || prev.endereco,
+          bairro: address.bairro || prev.bairro,
+          cidade: address.cidade || prev.cidade,
+          estado: address.estado || prev.estado
+        }))
+        toast.success('Endereço preenchido!')
+      }
+    }
+  }
+
+  const handleEnderecoPhoneChange = (e) => {
+    const masked = maskPhone(e.target.value)
+    setEnderecoForm(prev => ({ ...prev, telefone_local: masked }))
+  }
+
+  const getMyLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setEnderecoForm(prev => ({
+            ...prev,
+            latitude: position.coords.latitude.toFixed(6),
+            longitude: position.coords.longitude.toFixed(6)
+          }))
+          toast.success('Localização capturada!')
+        },
+        (error) => {
+          toast.error('Erro ao obter localização: ' + error.message)
+        }
+      )
+    } else {
+      toast.error('Geolocalização não suportada')
+    }
+  }
+
+  const saveEndereco = async () => {
+    if (!enderecoForm.nome.trim()) {
+      toast.error('Nome do local é obrigatório')
+      return
+    }
+
+    try {
+      if (isEditing && id) {
+        if (enderecoEditando) {
+          const { error } = await supabase
+            .from('cliente_enderecos')
+            .update({
+              ...enderecoForm,
+              latitude: enderecoForm.latitude ? parseFloat(enderecoForm.latitude) : null,
+              longitude: enderecoForm.longitude ? parseFloat(enderecoForm.longitude) : null,
+              atualizado_em: new Date().toISOString()
+            })
+            .eq('id', enderecoEditando.id)
+          
+          if (error) throw error
+          toast.success('Endereço atualizado!')
+        } else {
+          const { error } = await supabase
+            .from('cliente_enderecos')
+            .insert({
+              cliente_id: id,
+              ...enderecoForm,
+              latitude: enderecoForm.latitude ? parseFloat(enderecoForm.latitude) : null,
+              longitude: enderecoForm.longitude ? parseFloat(enderecoForm.longitude) : null
+            })
+          
+          if (error) throw error
+          toast.success('Endereço adicionado!')
+        }
+        
+        const { data } = await supabase
+          .from('cliente_enderecos')
+          .select('*')
+          .eq('cliente_id', id)
+          .eq('ativo', true)
+          .order('is_principal', { ascending: false })
+          .order('nome')
+        setEnderecos(data || [])
+      } else {
+        if (enderecoEditando) {
+          setEnderecos(prev => prev.map(e => 
+            e.id === enderecoEditando.id 
+              ? { ...e, ...enderecoForm }
+              : e
+          ))
+        } else {
+          setEnderecos(prev => [...prev, {
+            id: `temp-${Date.now()}`,
+            ...enderecoForm,
+            isTemp: true
+          }])
+        }
+        toast.success(enderecoEditando ? 'Endereço atualizado!' : 'Endereço adicionado!')
+      }
+      
+      setShowEnderecoModal(false)
+    } catch (error) {
+      toast.error('Erro ao salvar endereço: ' + error.message)
+    }
+  }
+
+  const deleteEndereco = async (endereco) => {
+    if (!confirm('Remover este endereço de obra?')) return
+    
+    try {
+      if (isEditing && id && !endereco.isTemp) {
+        const { error } = await supabase
+          .from('cliente_enderecos')
+          .update({ ativo: false })
+          .eq('id', endereco.id)
+        
+        if (error) throw error
+      }
+      
+      setEnderecos(prev => prev.filter(e => e.id !== endereco.id))
+      toast.success('Endereço removido!')
+    } catch (error) {
+      toast.error('Erro ao remover: ' + error.message)
+    }
+  }
+
+  const setPrincipal = async (endereco) => {
+    try {
+      if (isEditing && id && !endereco.isTemp) {
+        await supabase
+          .from('cliente_enderecos')
+          .update({ is_principal: false })
+          .eq('cliente_id', id)
+        
+        await supabase
+          .from('cliente_enderecos')
+          .update({ is_principal: true })
+          .eq('id', endereco.id)
+        
+        const { data } = await supabase
+          .from('cliente_enderecos')
+          .select('*')
+          .eq('cliente_id', id)
+          .eq('ativo', true)
+          .order('is_principal', { ascending: false })
+          .order('nome')
+        setEnderecos(data || [])
+      } else {
+        setEnderecos(prev => prev.map(e => ({
+          ...e,
+          is_principal: e.id === endereco.id
+        })))
+      }
+      toast.success('Endereço principal definido!')
+    } catch (error) {
+      toast.error('Erro: ' + error.message)
+    }
+  }
+
+  // ============================================
+  // VALIDAÇÃO E SUBMIT
+  // ============================================
 
   const validateForm = () => {
     const newErrors = {}
@@ -320,20 +575,50 @@ const ClienteForm = () => {
     setLoading(true)
 
     try {
+      let clienteId = id
+
       if (isEditing) {
         const { error } = await supabase
           .from('clientes')
           .update(formData)
           .eq('id', id)
         if (error) throw error
-        toast.success('Cliente atualizado!')
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('clientes')
           .insert([formData])
+          .select()
+          .single()
         if (error) throw error
-        toast.success('Cliente cadastrado!')
+        clienteId = data.id
       }
+
+      // Salvar endereços temporários (para cliente novo)
+      const enderecosPendentes = enderecos.filter(e => e.isTemp)
+      if (enderecosPendentes.length > 0) {
+        const enderecosData = enderecosPendentes.map(e => ({
+          cliente_id: clienteId,
+          nome: e.nome,
+          endereco: e.endereco,
+          numero: e.numero,
+          complemento: e.complemento,
+          bairro: e.bairro,
+          cidade: e.cidade,
+          estado: e.estado,
+          cep: e.cep,
+          latitude: e.latitude ? parseFloat(e.latitude) : null,
+          longitude: e.longitude ? parseFloat(e.longitude) : null,
+          referencia: e.referencia,
+          contato_local: e.contato_local,
+          telefone_local: e.telefone_local,
+          observacoes: e.observacoes,
+          is_principal: e.is_principal
+        }))
+        
+        await supabase.from('cliente_enderecos').insert(enderecosData)
+      }
+
+      toast.success(isEditing ? 'Cliente atualizado!' : 'Cliente cadastrado!')
       navigate('/clientes')
     } catch (error) {
       toast.error('Erro ao salvar: ' + error.message)
@@ -396,37 +681,36 @@ const ClienteForm = () => {
               </select>
             </div>
 
-            {/* CPF/CNPJ com máscara e validação */}
             <div>
-              <label className="label">{formData.tipo_pessoa === 'juridica' ? 'CNPJ' : 'CPF'}</label>
+              <label className="label">
+                {formData.tipo_pessoa === 'juridica' ? 'CNPJ' : 'CPF'}
+              </label>
               <div className="relative">
                 <input 
                   type="text" 
                   name="cpf_cnpj" 
                   value={formData.cpf_cnpj} 
                   onChange={handleCPFCNPJChange} 
-                  className={`input-field ${errors.cpf_cnpj ? 'border-red-500' : ''}`}
+                  className={`input-field pr-10 ${errors.cpf_cnpj ? 'border-red-500' : ''}`}
                   placeholder={formData.tipo_pessoa === 'juridica' ? '00.000.000/0000-00' : '000.000.000-00'}
                   maxLength={formData.tipo_pessoa === 'juridica' ? 18 : 14}
                 />
                 {formData.cpf_cnpj && (
-                  (formData.tipo_pessoa === 'juridica' && formData.cpf_cnpj.length === 18) ||
-                  (formData.tipo_pessoa === 'fisica' && formData.cpf_cnpj.length === 14)
-                ) && (
-                  <span className={`absolute right-3 top-1/2 -translate-y-1/2 ${errors.cpf_cnpj ? 'text-red-500' : 'text-green-500'}`}>
-                    {errors.cpf_cnpj ? <AlertCircle className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {errors.cpf_cnpj ? (
+                      <AlertCircle className="w-5 h-5 text-red-500" />
+                    ) : formData.cpf_cnpj.length === (formData.tipo_pessoa === 'juridica' ? 18 : 14) ? (
+                      <Check className="w-5 h-5 text-green-500" />
+                    ) : null}
                   </span>
                 )}
               </div>
-              {errors.cpf_cnpj && (
-                <p className="text-red-500 text-xs mt-1">
-                  {formData.tipo_pessoa === 'juridica' ? 'CNPJ inválido' : 'CPF inválido'}
-                </p>
-              )}
             </div>
 
             <div>
-              <label className="label">{formData.tipo_pessoa === 'juridica' ? 'Inscrição Estadual' : 'RG'}</label>
+              <label className="label">
+                {formData.tipo_pessoa === 'juridica' ? 'Inscrição Estadual' : 'RG'}
+              </label>
               <input 
                 type="text" 
                 name="rg_ie" 
@@ -442,7 +726,6 @@ const ClienteForm = () => {
         <div className="card">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Contato</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Telefone com máscara */}
             <div>
               <label className="label">Telefone</label>
               <input 
@@ -456,7 +739,6 @@ const ClienteForm = () => {
               />
             </div>
             
-            {/* Email com validação */}
             <div>
               <label className="label">E-mail</label>
               <div className="relative">
@@ -464,27 +746,29 @@ const ClienteForm = () => {
                   type="email" 
                   name="email" 
                   value={formData.email} 
-                  onChange={handleChange}
+                  onChange={handleChange} 
                   onBlur={handleEmailBlur}
-                  className={`input-field ${errors.email ? 'border-red-500' : ''}`}
+                  className={`input-field pr-10 ${errors.email ? 'border-red-500' : ''}`}
                   placeholder="email@exemplo.com"
                 />
                 {formData.email && (
-                  <span className={`absolute right-3 top-1/2 -translate-y-1/2 ${errors.email ? 'text-red-500' : 'text-green-500'}`}>
-                    {errors.email ? <AlertCircle className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {errors.email ? (
+                      <AlertCircle className="w-5 h-5 text-red-500" />
+                    ) : isValidEmail(formData.email) ? (
+                      <Check className="w-5 h-5 text-green-500" />
+                    ) : null}
                   </span>
                 )}
               </div>
-              {errors.email && <p className="text-red-500 text-xs mt-1">E-mail inválido (ex: nome@email.com)</p>}
             </div>
           </div>
         </div>
 
-        {/* Endereço */}
+        {/* Endereço Principal */}
         <div className="card">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Endereço</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Endereço Principal (Sede/Residência)</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* CEP com máscara e busca automática */}
             <div>
               <label className="label">CEP</label>
               <div className="relative">
@@ -503,7 +787,6 @@ const ClienteForm = () => {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-500 mt-1">Digite o CEP para buscar o endereço automaticamente</p>
             </div>
             
             <div></div>
@@ -546,6 +829,123 @@ const ClienteForm = () => {
           </div>
         </div>
 
+        {/* ENDEREÇOS DE OBRAS */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-blue-600" />
+                Endereços de Obras
+              </h2>
+              <p className="text-sm text-gray-500">Cadastre os locais onde serão realizados os serviços</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => openEnderecoModal()}
+              className="btn-primary text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Adicionar Obra
+            </button>
+          </div>
+
+          {enderecos.length === 0 ? (
+            <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+              <MapPin className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+              <p className="text-gray-500">Nenhum endereço de obra cadastrado</p>
+              <button
+                type="button"
+                onClick={() => openEnderecoModal()}
+                className="mt-3 text-blue-600 hover:text-blue-700 font-medium text-sm"
+              >
+                Adicionar primeiro endereço
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {enderecos.map((endereco) => (
+                <div
+                  key={endereco.id}
+                  className={`p-4 rounded-lg border-2 ${
+                    endereco.is_principal 
+                      ? 'border-yellow-400 bg-yellow-50' 
+                      : 'border-gray-200 bg-white'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-gray-900">{endereco.nome}</h3>
+                        {endereco.is_principal && (
+                          <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Star className="w-3 h-3" /> Principal
+                          </span>
+                        )}
+                        {endereco.isTemp && (
+                          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                            Pendente
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-gray-600 text-sm mt-1">
+                        {endereco.endereco}
+                        {endereco.numero && `, ${endereco.numero}`}
+                        {endereco.bairro && ` - ${endereco.bairro}`}
+                      </p>
+                      <p className="text-gray-500 text-sm">
+                        {endereco.cidade && endereco.estado 
+                          ? `${endereco.cidade}/${endereco.estado}` 
+                          : endereco.cidade || endereco.estado || ''}
+                        {endereco.cep && ` - CEP: ${endereco.cep}`}
+                      </p>
+                      {(endereco.latitude && endereco.longitude) && (
+                        <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                          <Navigation className="w-3 h-3" />
+                          GPS: {endereco.latitude}, {endereco.longitude}
+                        </p>
+                      )}
+                      {endereco.contato_local && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          Contato: {endereco.contato_local}
+                          {endereco.telefone_local && ` - ${endereco.telefone_local}`}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {!endereco.is_principal && (
+                        <button
+                          type="button"
+                          onClick={() => setPrincipal(endereco)}
+                          className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg"
+                          title="Definir como principal"
+                        >
+                          <Star className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => openEnderecoModal(endereco)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                        title="Editar"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteEndereco(endereco)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                        title="Remover"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Observações */}
         <div className="card">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Observações</h2>
@@ -570,6 +970,268 @@ const ClienteForm = () => {
           </button>
         </div>
       </form>
+
+      {/* MODAL DE ENDEREÇO DE OBRA */}
+      {showEnderecoModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white px-6 py-4 border-b flex items-center justify-between">
+              <h3 className="text-lg font-semibold">
+                {enderecoEditando ? 'Editar Endereço de Obra' : 'Novo Endereço de Obra'}
+              </h3>
+              <button
+                onClick={() => setShowEnderecoModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="label">Nome do Local *</label>
+                <input
+                  type="text"
+                  name="nome"
+                  value={enderecoForm.nome}
+                  onChange={handleEnderecoChange}
+                  className="input-field"
+                  placeholder="Ex: Obra Centro, Filial Norte, Fazenda Sul..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">CEP</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="cep"
+                      value={enderecoForm.cep}
+                      onChange={handleEnderecoCEPChange}
+                      className="input-field"
+                      placeholder="00.000-000"
+                      maxLength={10}
+                    />
+                    {loadingCEPEndereco && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div></div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-2">
+                  <label className="label">Endereço</label>
+                  <input
+                    type="text"
+                    name="endereco"
+                    value={enderecoForm.endereco}
+                    onChange={handleEnderecoChange}
+                    className="input-field"
+                    placeholder="Rua, Avenida..."
+                  />
+                </div>
+                <div>
+                  <label className="label">Número</label>
+                  <input
+                    type="text"
+                    name="numero"
+                    value={enderecoForm.numero}
+                    onChange={handleEnderecoChange}
+                    className="input-field"
+                    placeholder="123"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Complemento</label>
+                  <input
+                    type="text"
+                    name="complemento"
+                    value={enderecoForm.complemento}
+                    onChange={handleEnderecoChange}
+                    className="input-field"
+                    placeholder="Bloco, Sala, Galpão..."
+                  />
+                </div>
+                <div>
+                  <label className="label">Bairro</label>
+                  <input
+                    type="text"
+                    name="bairro"
+                    value={enderecoForm.bairro}
+                    onChange={handleEnderecoChange}
+                    className="input-field"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Cidade</label>
+                  <input
+                    type="text"
+                    name="cidade"
+                    value={enderecoForm.cidade}
+                    onChange={handleEnderecoChange}
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="label">Estado</label>
+                  <select
+                    name="estado"
+                    value={enderecoForm.estado}
+                    onChange={handleEnderecoChange}
+                    className="input-field"
+                  >
+                    <option value="">Selecione...</option>
+                    {estados.map(uf => (
+                      <option key={uf} value={uf}>{uf}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Coordenadas GPS */}
+              <div className="pt-4 border-t">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="label mb-0 flex items-center gap-2">
+                    <Navigation className="w-4 h-4 text-blue-600" />
+                    Coordenadas GPS
+                  </label>
+                  <button
+                    type="button"
+                    onClick={getMyLocation}
+                    className="btn-secondary text-xs"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    Usar minha localização
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label text-sm">Latitude</label>
+                    <input
+                      type="text"
+                      name="latitude"
+                      value={enderecoForm.latitude}
+                      onChange={handleEnderecoChange}
+                      className="input-field"
+                      placeholder="-23.550520"
+                    />
+                  </div>
+                  <div>
+                    <label className="label text-sm">Longitude</label>
+                    <input
+                      type="text"
+                      name="longitude"
+                      value={enderecoForm.longitude}
+                      onChange={handleEnderecoChange}
+                      className="input-field"
+                      placeholder="-46.633308"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Coordenadas precisas facilitam a navegação da equipe
+                </p>
+              </div>
+
+              {/* Referência e Contato */}
+              <div className="pt-4 border-t">
+                <div>
+                  <label className="label">Ponto de Referência</label>
+                  <input
+                    type="text"
+                    name="referencia"
+                    value={enderecoForm.referencia}
+                    onChange={handleEnderecoChange}
+                    className="input-field"
+                    placeholder="Próximo ao posto, em frente ao mercado..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mt-4">
+                  <div>
+                    <label className="label">Contato no Local</label>
+                    <input
+                      type="text"
+                      name="contato_local"
+                      value={enderecoForm.contato_local}
+                      onChange={handleEnderecoChange}
+                      className="input-field"
+                      placeholder="Nome da pessoa responsável"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Telefone do Contato</label>
+                    <input
+                      type="text"
+                      name="telefone_local"
+                      value={enderecoForm.telefone_local}
+                      onChange={handleEnderecoPhoneChange}
+                      className="input-field"
+                      placeholder="(00) 00000-0000"
+                      maxLength={15}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Observações</label>
+                <textarea
+                  name="observacoes"
+                  value={enderecoForm.observacoes}
+                  onChange={handleEnderecoChange}
+                  rows={2}
+                  className="input-field"
+                  placeholder="Informações adicionais sobre o local..."
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="is_principal"
+                  name="is_principal"
+                  checked={enderecoForm.is_principal}
+                  onChange={handleEnderecoChange}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="is_principal" className="text-sm text-gray-700">
+                  Definir como endereço principal
+                </label>
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-gray-50 px-6 py-4 border-t flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setShowEnderecoModal(false)}
+                className="btn-secondary"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={saveEndereco}
+                className="btn-primary"
+              >
+                <Save className="w-4 h-4" />
+                {enderecoEditando ? 'Atualizar' : 'Adicionar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -87,6 +87,7 @@ const OrdemServicoForm = () => {
   // Dados básicos da OS
   const [formData, setFormData] = useState({
     cliente_id: '',
+    cliente_endereco_id: '',
     equipe_id: '',
     empresa_contratante_id: '',
     data_agendamento: '',
@@ -121,6 +122,10 @@ const OrdemServicoForm = () => {
   // Anexos da OS (para upload durante criação)
   const [anexos, setAnexos] = useState([])
   const [uploadingAnexo, setUploadingAnexo] = useState(false)
+  
+  // Endereços de obras do cliente selecionado
+  const [enderecosObra, setEnderecosObra] = useState([])
+  const [loadingEnderecos, setLoadingEnderecos] = useState(false)
 
   // Buscar dados auxiliares
   const { data: clientes } = useQuery({
@@ -195,6 +200,7 @@ const OrdemServicoForm = () => {
 
       setFormData({
         cliente_id: os.cliente_id || '',
+        cliente_endereco_id: os.cliente_endereco_id || '',
         equipe_id: os.equipe_id || '',
         empresa_contratante_id: os.empresa_contratante_id || '',
         data_agendamento: os.data_agendamento || '',
@@ -216,6 +222,18 @@ const OrdemServicoForm = () => {
         veiculo_id: os.veiculo_id || '',
         km_inicial: os.km_inicial || ''
       })
+
+      // Carregar endereços de obra do cliente
+      if (os.cliente_id) {
+        const { data: enderecosData } = await supabase
+          .from('cliente_enderecos')
+          .select('*')
+          .eq('cliente_id', os.cliente_id)
+          .eq('ativo', true)
+          .order('is_principal', { ascending: false })
+          .order('nome')
+        setEnderecosObra(enderecosData || [])
+      }
 
       // Carregar anexos existentes
       const { data: osAnexos } = await supabase
@@ -267,6 +285,85 @@ const OrdemServicoForm = () => {
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  // Handler específico para seleção de cliente
+  const handleClienteChange = async (e) => {
+    const clienteId = e.target.value
+    setFormData(prev => ({ 
+      ...prev, 
+      cliente_id: clienteId,
+      cliente_endereco_id: '',
+      // Limpa os campos de endereço
+      endereco: '',
+      cidade: '',
+      estado: '',
+      cep: '',
+      latitude: '',
+      longitude: ''
+    }))
+    
+    if (clienteId) {
+      setLoadingEnderecos(true)
+      try {
+        const { data, error } = await supabase
+          .from('cliente_enderecos')
+          .select('*')
+          .eq('cliente_id', clienteId)
+          .eq('ativo', true)
+          .order('is_principal', { ascending: false })
+          .order('nome')
+        
+        if (!error) {
+          setEnderecosObra(data || [])
+          
+          // Se tiver endereço principal, seleciona automaticamente
+          const principal = data?.find(e => e.is_principal)
+          if (principal) {
+            handleEnderecoObraChange({ target: { value: principal.id } }, data)
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao carregar endereços:', error)
+      } finally {
+        setLoadingEnderecos(false)
+      }
+    } else {
+      setEnderecosObra([])
+    }
+  }
+
+  // Handler para seleção de endereço de obra
+  const handleEnderecoObraChange = (e, enderecosLista = null) => {
+    const enderecoId = e.target.value
+    const lista = enderecosLista || enderecosObra
+    const endereco = lista.find(end => end.id === enderecoId)
+    
+    if (endereco) {
+      setFormData(prev => ({
+        ...prev,
+        cliente_endereco_id: enderecoId,
+        endereco: [endereco.endereco, endereco.numero].filter(Boolean).join(', ') + 
+                  (endereco.complemento ? ` - ${endereco.complemento}` : '') +
+                  (endereco.bairro ? ` - ${endereco.bairro}` : ''),
+        cidade: endereco.cidade || '',
+        estado: endereco.estado || '',
+        cep: endereco.cep || '',
+        latitude: endereco.latitude || '',
+        longitude: endereco.longitude || ''
+      }))
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        cliente_endereco_id: '',
+        endereco: '',
+        cidade: '',
+        estado: '',
+        cep: '',
+        latitude: '',
+        longitude: ''
+      }))
+    }
   }
 
   // Handlers para valores monetários
@@ -389,6 +486,7 @@ const OrdemServicoForm = () => {
     try {
       const osData = {
         cliente_id: formData.cliente_id,
+        cliente_endereco_id: formData.cliente_endereco_id || null,
         equipe_id: formData.equipe_id || null,
         empresa_contratante_id: formData.empresa_contratante_id || null,
         data_agendamento: formData.data_agendamento || null,
@@ -592,13 +690,52 @@ const OrdemServicoForm = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="label">Cliente *</label>
-                  <select name="cliente_id" value={formData.cliente_id} onChange={handleChange} className="input-field" required>
+                  <select name="cliente_id" value={formData.cliente_id} onChange={handleClienteChange} className="input-field" required>
                     <option value="">Selecione um cliente...</option>
                     {clientes?.map(c => (
                       <option key={c.id} value={c.id}>{c.nome}</option>
                     ))}
                   </select>
                 </div>
+                
+                {/* Endereço de Obra do Cliente */}
+                <div>
+                  <label className="label flex items-center gap-2">
+                    Local da Obra
+                    {loadingEnderecos && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
+                  </label>
+                  <select 
+                    name="cliente_endereco_id" 
+                    value={formData.cliente_endereco_id} 
+                    onChange={handleEnderecoObraChange} 
+                    className="input-field"
+                    disabled={!formData.cliente_id || loadingEnderecos}
+                  >
+                    <option value="">
+                      {!formData.cliente_id 
+                        ? 'Selecione um cliente primeiro...' 
+                        : enderecosObra.length === 0 
+                          ? 'Nenhum endereço cadastrado' 
+                          : 'Selecione o local da obra...'}
+                    </option>
+                    {enderecosObra.map(end => (
+                      <option key={end.id} value={end.id}>
+                        {end.nome}
+                        {end.is_principal ? ' ⭐' : ''}
+                        {end.cidade ? ` - ${end.cidade}/${end.estado}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {formData.cliente_id && enderecosObra.length === 0 && !loadingEnderecos && (
+                    <p className="text-xs text-orange-600 mt-1">
+                      Este cliente não tem endereços de obra cadastrados. 
+                      <a href={`/clientes/${formData.cliente_id}`} className="text-blue-600 hover:underline ml-1">
+                        Cadastrar endereço
+                      </a>
+                    </p>
+                  )}
+                </div>
+                
                 <div>
                   <label className="label">Empresa Contratante</label>
                   <select name="empresa_contratante_id" value={formData.empresa_contratante_id} onChange={handleChange} className="input-field">
