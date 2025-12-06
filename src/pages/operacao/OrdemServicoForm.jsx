@@ -2,7 +2,12 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Save, Loader2, Plus, Trash2, MapPin, Calendar, Users, Wrench, DollarSign, Car, FileText, Image, Video, Upload, Eye, X, Navigation, Crosshair } from 'lucide-react'
+import { 
+  ArrowLeft, Save, Loader2, Plus, Trash2, MapPin, Calendar, Users, Wrench, 
+  DollarSign, Car, FileText, Image, Video, Upload, Eye, X, Navigation, Crosshair,
+  TrendingUp, TrendingDown, Fuel, Coffee, UtensilsCrossed, Calculator, AlertCircle,
+  CheckCircle, Percent
+} from 'lucide-react'
 import toast from 'react-hot-toast'
 
 // ============================================
@@ -11,67 +16,39 @@ import toast from 'react-hot-toast'
 
 const maskMoney = (value) => {
   if (!value) return ''
-  
-  // Remove tudo que não é número
   let numbers = value.toString().replace(/\D/g, '')
-  
-  // Se vazio ou só zeros, retorna vazio
   if (!numbers || numbers === '0') return ''
-  
-  // Remove zeros à esquerda
   numbers = numbers.replace(/^0+/, '')
-  
-  // Se ficou vazio após remover zeros, retorna vazio
   if (!numbers) return ''
-  
-  // Garante pelo menos 3 dígitos (para os centavos)
   numbers = numbers.padStart(3, '0')
-  
-  // Separa reais e centavos
   const cents = numbers.slice(-2)
   let reais = numbers.slice(0, -2)
-  
-  // Remove zeros à esquerda dos reais
   reais = reais.replace(/^0+/, '') || '0'
-  
-  // Adiciona pontos a cada 3 dígitos nos reais
   reais = reais.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-  
   return `R$ ${reais},${cents}`
 }
 
 const parseMoney = (value) => {
   if (!value) return null
-  
-  // Remove R$, espaços e pontos, substitui vírgula por ponto
-  const numbers = value
-    .replace('R$', '')
-    .replace(/\s/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.')
-  
+  const numbers = value.replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.')
   const parsed = parseFloat(numbers)
   return isNaN(parsed) ? null : parsed
 }
 
-// Formata número do banco para exibição
 const formatMoneyFromDB = (value) => {
   if (!value && value !== 0) return ''
   const cents = Math.round(value * 100).toString()
   return maskMoney(cents)
 }
 
-// Formata número para exibição como moeda (para campos readonly)
 const formatCurrency = (value) => {
   if (!value && value !== 0) return 'R$ 0,00'
-  
   const num = parseFloat(value)
   const cents = Math.round(num * 100).toString().padStart(3, '0')
   const centsStr = cents.slice(-2)
   let reais = cents.slice(0, -2)
   reais = reais.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
   if (!reais) reais = '0'
-  
   return `R$ ${reais},${centsStr}`
 }
 
@@ -107,23 +84,15 @@ const OrdemServicoForm = () => {
     observacoes: '',
     observacoes_internas: '',
     veiculo_id: '',
-    km_inicial: ''
+    km_inicial: '',
+    valor_gasolina_extra: '' // NOVO: campo para gasolina extra
   })
 
-  // Serviços da OS
   const [servicos, setServicos] = useState([])
-  
-  // Colaboradores da OS
   const [colaboradores, setColaboradores] = useState([])
-  
-  // Custos extras
   const [custosExtras, setCustosExtras] = useState([])
-  
-  // Anexos da OS (para upload durante criação)
   const [anexos, setAnexos] = useState([])
   const [uploadingAnexo, setUploadingAnexo] = useState(false)
-  
-  // Endereços de obras do cliente selecionado
   const [enderecosObra, setEnderecosObra] = useState([])
   const [loadingEnderecos, setLoadingEnderecos] = useState(false)
 
@@ -160,22 +129,35 @@ const OrdemServicoForm = () => {
     }
   })
 
+  // ATUALIZADO: Buscar colaboradores COM os campos de custos diários
   const { data: colaboradoresDisponiveis } = useQuery({
-    queryKey: ['colaboradores-select'],
+    queryKey: ['colaboradores-select-custos'],
     queryFn: async () => {
       const { data } = await supabase
         .from('colaboradores')
-        .select('id, nome, funcao:funcoes(id, nome, valor_diaria)')
+        .select(`
+          id, nome, 
+          funcao:funcoes(id, nome, valor_diaria, valor_meia_diaria),
+          valor_cafe_dia,
+          valor_almoco_dia,
+          valor_transporte_dia,
+          valor_outros_dia
+        `)
         .eq('ativo', true)
         .order('nome')
       return data
     }
   })
 
+  // ATUALIZADO: Buscar veículos COM os campos de custos diários
   const { data: veiculos } = useQuery({
-    queryKey: ['veiculos-select'],
+    queryKey: ['veiculos-select-custos'],
     queryFn: async () => {
-      const { data } = await supabase.from('veiculos').select('id, placa, modelo').eq('ativo', true).order('modelo')
+      const { data } = await supabase
+        .from('veiculos')
+        .select('id, placa, modelo, valor_aluguel_dia, valor_gasolina_dia')
+        .eq('ativo', true)
+        .order('modelo')
       return data
     }
   })
@@ -189,7 +171,6 @@ const OrdemServicoForm = () => {
   const loadOrdemServico = async () => {
     setLoadingData(true)
     try {
-      // Carregar OS
       const { data: os, error } = await supabase
         .from('ordens_servico')
         .select('*')
@@ -220,10 +201,11 @@ const OrdemServicoForm = () => {
         observacoes: os.observacoes || '',
         observacoes_internas: os.observacoes_internas || '',
         veiculo_id: os.veiculo_id || '',
-        km_inicial: os.km_inicial || ''
+        km_inicial: os.km_inicial || '',
+        valor_gasolina_extra: formatMoneyFromDB(os.valor_gasolina_extra)
       })
 
-      // Carregar endereços de obra do cliente
+      // Carregar endereços
       if (os.cliente_id) {
         const { data: enderecosData } = await supabase
           .from('cliente_enderecos')
@@ -231,11 +213,10 @@ const OrdemServicoForm = () => {
           .eq('cliente_id', os.cliente_id)
           .eq('ativo', true)
           .order('is_principal', { ascending: false })
-          .order('nome')
         setEnderecosObra(enderecosData || [])
       }
 
-      // Carregar anexos existentes
+      // Carregar anexos
       const { data: osAnexos } = await supabase
         .from('os_anexos')
         .select('*')
@@ -248,22 +229,21 @@ const OrdemServicoForm = () => {
         .from('os_servicos')
         .select('*, servico:servicos(nome)')
         .eq('ordem_servico_id', id)
-
-      setServicos(osServicos?.map(s => ({
-        ...s,
-        servico_nome: s.servico?.nome
-      })) || [])
+      setServicos(osServicos?.map(s => ({ ...s, servico_nome: s.servico?.nome })) || [])
 
       // Carregar colaboradores
       const { data: osColaboradores } = await supabase
         .from('os_colaboradores')
-        .select('*, colaborador:colaboradores(nome), funcao:funcoes(nome)')
+        .select('*, colaborador:colaboradores(nome, valor_cafe_dia, valor_almoco_dia, valor_transporte_dia, valor_outros_dia), funcao:funcoes(nome)')
         .eq('ordem_servico_id', id)
-
       setColaboradores(osColaboradores?.map(c => ({
         ...c,
         colaborador_nome: c.colaborador?.nome,
-        funcao_nome: c.funcao?.nome
+        funcao_nome: c.funcao?.nome,
+        valor_cafe_dia: c.colaborador?.valor_cafe_dia || 0,
+        valor_almoco_dia: c.colaborador?.valor_almoco_dia || 0,
+        valor_transporte_dia: c.colaborador?.valor_transporte_dia || 0,
+        valor_outros_dia: c.colaborador?.valor_outros_dia || 0
       })) || [])
 
       // Carregar custos extras
@@ -271,7 +251,6 @@ const OrdemServicoForm = () => {
         .from('os_custos_extras')
         .select('*')
         .eq('ordem_servico_id', id)
-
       setCustosExtras(osCustos || [])
 
     } catch (error) {
@@ -287,14 +266,12 @@ const OrdemServicoForm = () => {
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
-  // Handler específico para seleção de cliente
   const handleClienteChange = async (e) => {
     const clienteId = e.target.value
     setFormData(prev => ({ 
       ...prev, 
       cliente_id: clienteId,
       cliente_endereco_id: '',
-      // Limpa os campos de endereço
       endereco: '',
       cidade: '',
       estado: '',
@@ -312,12 +289,9 @@ const OrdemServicoForm = () => {
           .eq('cliente_id', clienteId)
           .eq('ativo', true)
           .order('is_principal', { ascending: false })
-          .order('nome')
         
         if (!error) {
           setEnderecosObra(data || [])
-          
-          // Se tiver endereço principal, seleciona automaticamente
           const principal = data?.find(e => e.is_principal)
           if (principal) {
             handleEnderecoObraChange({ target: { value: principal.id } }, data)
@@ -333,7 +307,6 @@ const OrdemServicoForm = () => {
     }
   }
 
-  // Handler para seleção de endereço de obra
   const handleEnderecoObraChange = (e, enderecosLista = null) => {
     const enderecoId = e.target.value
     const lista = enderecosLista || enderecosObra
@@ -366,7 +339,6 @@ const OrdemServicoForm = () => {
     }
   }
 
-  // Handlers para valores monetários
   const handleMoneyChange = (name) => (e) => {
     const masked = maskMoney(e.target.value)
     setFormData(prev => ({ ...prev, [name]: masked }))
@@ -388,7 +360,6 @@ const OrdemServicoForm = () => {
     const updated = [...servicos]
     updated[index][field] = value
 
-    // Se selecionou um serviço, preencher valor unitário
     if (field === 'servico_id' && value) {
       const servico = servicosDisponiveis?.find(s => s.id === value)
       if (servico) {
@@ -397,7 +368,6 @@ const OrdemServicoForm = () => {
       }
     }
 
-    // Recalcular valor total
     if (field === 'quantidade' || field === 'valor_unitario') {
       updated[index].valor_total = (parseFloat(updated[index].quantidade) || 0) * (parseFloat(updated[index].valor_unitario) || 0)
     }
@@ -409,7 +379,7 @@ const OrdemServicoForm = () => {
     setServicos(servicos.filter((_, i) => i !== index))
   }
 
-  // Funções para Colaboradores
+  // Funções para Colaboradores - ATUALIZADO para incluir custos
   const addColaborador = () => {
     setColaboradores([...colaboradores, {
       colaborador_id: '',
@@ -417,6 +387,10 @@ const OrdemServicoForm = () => {
       valor_diaria: 0,
       dias_trabalhados: 1,
       valor_total: 0,
+      valor_cafe_dia: 0,
+      valor_almoco_dia: 0,
+      valor_transporte_dia: 0,
+      valor_outros_dia: 0,
       isNew: true
     }])
   }
@@ -425,7 +399,7 @@ const OrdemServicoForm = () => {
     const updated = [...colaboradores]
     updated[index][field] = value
 
-    // Se selecionou um colaborador, preencher função e valor
+    // Se selecionou um colaborador, preencher função, valor e custos
     if (field === 'colaborador_id' && value) {
       const col = colaboradoresDisponiveis?.find(c => c.id === value)
       if (col) {
@@ -433,10 +407,15 @@ const OrdemServicoForm = () => {
         updated[index].valor_diaria = col.funcao?.valor_diaria || 0
         updated[index].colaborador_nome = col.nome
         updated[index].funcao_nome = col.funcao?.nome
+        // NOVO: Preencher custos do colaborador
+        updated[index].valor_cafe_dia = col.valor_cafe_dia || 0
+        updated[index].valor_almoco_dia = col.valor_almoco_dia || 0
+        updated[index].valor_transporte_dia = col.valor_transporte_dia || 0
+        updated[index].valor_outros_dia = col.valor_outros_dia || 0
       }
     }
 
-    // Recalcular valor total
+    // Recalcular valor total da diária
     if (field === 'dias_trabalhados' || field === 'valor_diaria') {
       updated[index].valor_total = (parseFloat(updated[index].dias_trabalhados) || 0) * (parseFloat(updated[index].valor_diaria) || 0)
     }
@@ -468,10 +447,48 @@ const OrdemServicoForm = () => {
     setCustosExtras(custosExtras.filter((_, i) => i !== index))
   }
 
-  // Calcular totais
+  // ============================================
+  // CÁLCULOS AUTOMÁTICOS DE CUSTOS
+  // ============================================
+
+  // Total dos serviços (RECEITA)
   const totalServicos = servicos.reduce((sum, s) => sum + (parseFloat(s.valor_total) || 0), 0)
-  const totalMaoObra = colaboradores.reduce((sum, c) => sum + (parseFloat(c.valor_total) || 0), 0)
+  
+  // Total de diárias dos colaboradores
+  const totalDiarias = colaboradores.reduce((sum, c) => sum + (parseFloat(c.valor_total) || 0), 0)
+
+  // NOVO: Custos de alimentação calculados automaticamente
+  const custoAlimentacao = colaboradores.reduce((sum, c) => {
+    const dias = parseFloat(c.dias_trabalhados) || 0
+    const cafe = parseFloat(c.valor_cafe_dia) || 0
+    const almoco = parseFloat(c.valor_almoco_dia) || 0
+    const transporte = parseFloat(c.valor_transporte_dia) || 0
+    const outros = parseFloat(c.valor_outros_dia) || 0
+    return sum + (dias * (cafe + almoco + transporte + outros))
+  }, 0)
+
+  // NOVO: Custo do veículo calculado automaticamente
+  const veiculoSelecionado = veiculos?.find(v => v.id === formData.veiculo_id)
+  const custoVeiculoAluguel = parseFloat(veiculoSelecionado?.valor_aluguel_dia) || 0
+  const custoVeiculoGasolina = parseFloat(veiculoSelecionado?.valor_gasolina_dia) || 0
+  const custoGasolinaExtra = parseMoney(formData.valor_gasolina_extra) || 0
+  const custoVeiculoTotal = custoVeiculoAluguel + custoVeiculoGasolina + custoGasolinaExtra
+
+  // Custos extras manuais
   const totalCustosExtras = custosExtras.reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0)
+
+  // Total de mão de obra (diárias + alimentação)
+  const totalMaoObra = totalDiarias + custoAlimentacao
+
+  // TOTAL DE CUSTOS
+  const totalCustos = totalMaoObra + custoVeiculoTotal + totalCustosExtras
+
+  // LUCRO PREVISTO
+  const valorReceitaOS = parseMoney(formData.valor_total) || totalServicos
+  const lucroPrevisto = valorReceitaOS - totalCustos
+  const margemLucro = valorReceitaOS > 0 ? (lucroPrevisto / valorReceitaOS) * 100 : 0
+
+  // ============================================
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -501,6 +518,7 @@ const OrdemServicoForm = () => {
         valor_mao_obra: totalMaoObra,
         valor_materiais: parseMoney(formData.valor_materiais) || 0,
         valor_deslocamento: parseMoney(formData.valor_deslocamento) || 0,
+        valor_gasolina_extra: parseMoney(formData.valor_gasolina_extra) || 0,
         status: formData.status,
         prioridade: formData.prioridade,
         observacoes: formData.observacoes,
@@ -512,29 +530,15 @@ const OrdemServicoForm = () => {
       let osId = id
 
       if (isEditing) {
-        const { error } = await supabase
-          .from('ordens_servico')
-          .update(osData)
-          .eq('id', id)
+        const { error } = await supabase.from('ordens_servico').update(osData).eq('id', id)
         if (error) throw error
-
-        // Limpar dados antigos
         await supabase.from('os_servicos').delete().eq('ordem_servico_id', id)
         await supabase.from('os_colaboradores').delete().eq('ordem_servico_id', id)
         await supabase.from('os_custos_extras').delete().eq('ordem_servico_id', id)
       } else {
-        // Gerar número da OS
-        const { count } = await supabase
-          .from('ordens_servico')
-          .select('*', { count: 'exact', head: true })
-        
+        const { count } = await supabase.from('ordens_servico').select('*', { count: 'exact', head: true })
         osData.numero = `OS-${String((count || 0) + 1).padStart(5, '0')}`
-
-        const { data, error } = await supabase
-          .from('ordens_servico')
-          .insert([osData])
-          .select()
-          .single()
+        const { data, error } = await supabase.from('ordens_servico').insert([osData]).select().single()
         if (error) throw error
         osId = data.id
       }
@@ -576,7 +580,7 @@ const OrdemServicoForm = () => {
         await supabase.from('os_custos_extras').insert(custosData)
       }
 
-      // Upload dos anexos pendentes (apenas para OS nova)
+      // Upload dos anexos
       const anexosPendentes = anexos.filter(a => a.isTemp && a.file)
       if (anexosPendentes.length > 0) {
         for (const anexo of anexosPendentes) {
@@ -584,25 +588,18 @@ const OrdemServicoForm = () => {
           const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`
           const filePath = `${osId}/${fileName}`
           
-          const { error: uploadError } = await supabase.storage
-            .from('os-anexos')
-            .upload(filePath, anexo.file)
+          const { error: uploadError } = await supabase.storage.from('os-anexos').upload(filePath, anexo.file)
           
           if (!uploadError) {
-            const { data: { publicUrl } } = supabase.storage
-              .from('os-anexos')
-              .getPublicUrl(filePath)
-            
-            await supabase
-              .from('os_anexos')
-              .insert({
-                ordem_servico_id: osId,
-                nome: anexo.nome,
-                tipo: anexo.tipo,
-                arquivo_url: publicUrl,
-                arquivo_nome: anexo.arquivo_nome,
-                arquivo_tamanho: anexo.arquivo_tamanho
-              })
+            const { data: { publicUrl } } = supabase.storage.from('os-anexos').getPublicUrl(filePath)
+            await supabase.from('os_anexos').insert({
+              ordem_servico_id: osId,
+              nome: anexo.nome,
+              tipo: anexo.tipo,
+              arquivo_url: publicUrl,
+              arquivo_nome: anexo.arquivo_nome,
+              arquivo_tamanho: anexo.arquivo_tamanho
+            })
           }
         }
       }
@@ -615,10 +612,6 @@ const OrdemServicoForm = () => {
     } finally {
       setLoading(false)
     }
-  }
-
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0)
   }
 
   const estados = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
@@ -635,8 +628,9 @@ const OrdemServicoForm = () => {
     { id: 'dados', label: 'Dados Gerais', icon: Calendar },
     { id: 'servicos', label: 'Serviços', icon: Wrench },
     { id: 'equipe', label: 'Equipe', icon: Users },
-    { id: 'custos', label: 'Custos', icon: DollarSign },
     { id: 'veiculo', label: 'Veículo', icon: Car },
+    { id: 'custos', label: 'Custos', icon: DollarSign },
+    { id: 'resumo', label: 'Resumo Financeiro', icon: Calculator },
   ]
 
   if (loadingData) {
@@ -698,7 +692,6 @@ const OrdemServicoForm = () => {
                   </select>
                 </div>
                 
-                {/* Endereço de Obra do Cliente */}
                 <div>
                   <label className="label flex items-center gap-2">
                     Local da Obra
@@ -712,28 +705,14 @@ const OrdemServicoForm = () => {
                     disabled={!formData.cliente_id || loadingEnderecos}
                   >
                     <option value="">
-                      {!formData.cliente_id 
-                        ? 'Selecione um cliente primeiro...' 
-                        : enderecosObra.length === 0 
-                          ? 'Nenhum endereço cadastrado' 
-                          : 'Selecione o local da obra...'}
+                      {!formData.cliente_id ? 'Selecione um cliente primeiro...' : enderecosObra.length === 0 ? 'Nenhum endereço cadastrado' : 'Selecione o local da obra...'}
                     </option>
                     {enderecosObra.map(end => (
                       <option key={end.id} value={end.id}>
-                        {end.nome}
-                        {end.is_principal ? ' ⭐' : ''}
-                        {end.cidade ? ` - ${end.cidade}/${end.estado}` : ''}
+                        {end.nome}{end.is_principal ? ' ⭐' : ''}{end.cidade ? ` - ${end.cidade}/${end.estado}` : ''}
                       </option>
                     ))}
                   </select>
-                  {formData.cliente_id && enderecosObra.length === 0 && !loadingEnderecos && (
-                    <p className="text-xs text-orange-600 mt-1">
-                      Este cliente não tem endereços de obra cadastrados. 
-                      <a href={`/clientes/${formData.cliente_id}`} className="text-blue-600 hover:underline ml-1">
-                        Cadastrar endereço
-                      </a>
-                    </p>
-                  )}
                 </div>
                 
                 <div>
@@ -750,10 +729,6 @@ const OrdemServicoForm = () => {
                   <input type="date" name="data_agendamento" value={formData.data_agendamento} onChange={handleChange} className="input-field" />
                 </div>
                 <div>
-                  <label className="label">Previsão de Duração (horas)</label>
-                  <input type="number" name="previsao_duracao" value={formData.previsao_duracao} onChange={handleChange} className="input-field" min="1" />
-                </div>
-                <div>
                   <label className="label">Status</label>
                   <select name="status" value={formData.status} onChange={handleChange} className="input-field">
                     <option value="agendada">Agendada</option>
@@ -762,7 +737,6 @@ const OrdemServicoForm = () => {
                     <option value="pausada">Pausada</option>
                     <option value="concluida">Concluída</option>
                     <option value="cancelada">Cancelada</option>
-                    <option value="com_pendencia">Com Pendência</option>
                   </select>
                 </div>
                 <div>
@@ -804,73 +778,6 @@ const OrdemServicoForm = () => {
                     {estados.map(uf => <option key={uf} value={uf}>{uf}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="label">CEP</label>
-                  <input type="text" name="cep" value={formData.cep} onChange={handleChange} className="input-field" placeholder="00000-000" />
-                </div>
-              </div>
-              
-              {/* Coordenadas GPS */}
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="label flex items-center gap-2 mb-0">
-                    <Crosshair className="w-4 h-4 text-blue-600" />
-                    Coordenadas GPS (opcional)
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (navigator.geolocation) {
-                        navigator.geolocation.getCurrentPosition(
-                          (position) => {
-                            setFormData(prev => ({
-                              ...prev,
-                              latitude: position.coords.latitude.toFixed(6),
-                              longitude: position.coords.longitude.toFixed(6)
-                            }))
-                            toast.success('Localização capturada!')
-                          },
-                          (error) => {
-                            toast.error('Erro ao obter localização: ' + error.message)
-                          }
-                        )
-                      } else {
-                        toast.error('Geolocalização não suportada')
-                      }
-                    }}
-                    className="btn-secondary text-xs"
-                  >
-                    <Navigation className="w-4 h-4" />
-                    Usar minha localização
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="label text-sm">Latitude</label>
-                    <input 
-                      type="text" 
-                      name="latitude" 
-                      value={formData.latitude} 
-                      onChange={handleChange} 
-                      className="input-field" 
-                      placeholder="-23.550520" 
-                    />
-                  </div>
-                  <div>
-                    <label className="label text-sm">Longitude</label>
-                    <input 
-                      type="text" 
-                      name="longitude" 
-                      value={formData.longitude} 
-                      onChange={handleChange} 
-                      className="input-field" 
-                      placeholder="-46.633308" 
-                    />
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Coordenadas são mais precisas para navegação em áreas rurais ou locais novos
-                </p>
               </div>
             </div>
 
@@ -886,194 +793,6 @@ const OrdemServicoForm = () => {
                   <textarea name="observacoes_internas" value={formData.observacoes_internas} onChange={handleChange} rows={3} className="input-field" />
                 </div>
               </div>
-            </div>
-
-            {/* Documentos e Instruções */}
-            <div className="card">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-blue-600" />
-                  Documentos e Instruções
-                </h2>
-                <label className="btn-secondary text-sm cursor-pointer">
-                  <Upload className="w-4 h-4" />
-                  Adicionar Arquivo
-                  <input
-                    type="file"
-                    className="hidden"
-                    multiple
-                    accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.mp4,.mov,.avi,.webm"
-                    onChange={async (e) => {
-                      const files = Array.from(e.target.files)
-                      if (files.length === 0) return
-                      
-                      setUploadingAnexo(true)
-                      
-                      try {
-                        for (const file of files) {
-                          const fileExt = file.name.split('.').pop().toLowerCase()
-                          const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`
-                          
-                          // Determinar tipo
-                          let tipo = 'outro'
-                          if (['pdf'].includes(fileExt)) tipo = 'pdf'
-                          else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt)) tipo = 'imagem'
-                          else if (['mp4', 'mov', 'avi', 'webm'].includes(fileExt)) tipo = 'video'
-                          
-                          // Validar tamanho (máx 50MB)
-                          if (file.size > 50 * 1024 * 1024) {
-                            toast.error(`${file.name} é muito grande (máx 50MB)`)
-                            continue
-                          }
-                          
-                          // Para OS nova, guardar temporariamente
-                          // Para OS existente, fazer upload imediato
-                          if (isEditing && id) {
-                            const filePath = `${id}/${fileName}`
-                            const { error: uploadError } = await supabase.storage
-                              .from('os-anexos')
-                              .upload(filePath, file)
-                            
-                            if (uploadError) throw uploadError
-                            
-                            const { data: { publicUrl } } = supabase.storage
-                              .from('os-anexos')
-                              .getPublicUrl(filePath)
-                            
-                            const { error: dbError } = await supabase
-                              .from('os_anexos')
-                              .insert({
-                                ordem_servico_id: id,
-                                nome: file.name.replace(`.${fileExt}`, ''),
-                                tipo,
-                                arquivo_url: publicUrl,
-                                arquivo_nome: file.name,
-                                arquivo_tamanho: file.size
-                              })
-                            
-                            if (dbError) throw dbError
-                            
-                            // Recarregar anexos
-                            const { data: osAnexos } = await supabase
-                              .from('os_anexos')
-                              .select('*')
-                              .eq('ordem_servico_id', id)
-                              .eq('ativo', true)
-                            setAnexos(osAnexos || [])
-                          } else {
-                            // Para OS nova, guardar localmente para upload após salvar
-                            setAnexos(prev => [...prev, {
-                              id: `temp-${Date.now()}-${Math.random()}`,
-                              nome: file.name.replace(`.${fileExt}`, ''),
-                              tipo,
-                              arquivo_nome: file.name,
-                              arquivo_tamanho: file.size,
-                              file: file, // Guardar o arquivo para upload posterior
-                              isTemp: true
-                            }])
-                          }
-                        }
-                        
-                        toast.success(`${files.length} arquivo(s) adicionado(s)!`)
-                      } catch (error) {
-                        console.error('Erro no upload:', error)
-                        toast.error('Erro ao enviar: ' + error.message)
-                      } finally {
-                        setUploadingAnexo(false)
-                        e.target.value = '' // Limpar input
-                      }
-                    }}
-                    disabled={uploadingAnexo}
-                  />
-                </label>
-              </div>
-
-              {uploadingAnexo && (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-                  <span className="ml-2 text-gray-600">Enviando...</span>
-                </div>
-              )}
-
-              {anexos.length === 0 ? (
-                <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-                  <FileText className="w-10 h-10 mx-auto text-gray-300 mb-2" />
-                  <p className="text-gray-500 text-sm">Nenhum documento anexado</p>
-                  <p className="text-gray-400 text-xs mt-1">PDFs, fotos ou vídeos de instrução</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {anexos.map((anexo) => (
-                    <div
-                      key={anexo.id}
-                      className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200"
-                    >
-                      <div className="w-10 h-10 flex items-center justify-center bg-white rounded-lg border">
-                        {anexo.tipo === 'pdf' && <FileText className="w-5 h-5 text-red-500" />}
-                        {anexo.tipo === 'imagem' && <Image className="w-5 h-5 text-blue-500" />}
-                        {anexo.tipo === 'video' && <Video className="w-5 h-5 text-purple-500" />}
-                        {anexo.tipo === 'outro' && <FileText className="w-5 h-5 text-gray-500" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 text-sm truncate">{anexo.nome}</p>
-                        <p className="text-xs text-gray-500">
-                          {anexo.tipo.toUpperCase()} • {anexo.arquivo_tamanho ? (anexo.arquivo_tamanho / 1024 / 1024).toFixed(1) + ' MB' : '-'}
-                          {anexo.isTemp && <span className="ml-1 text-orange-500">(pendente)</span>}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {!anexo.isTemp && anexo.arquivo_url && (
-                          <button
-                            type="button"
-                            onClick={() => window.open(anexo.arquivo_url, '_blank')}
-                            className="p-1.5 text-blue-500 hover:bg-blue-50 rounded"
-                            title="Visualizar"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (anexo.isTemp) {
-                              // Remover apenas do estado local
-                              setAnexos(prev => prev.filter(a => a.id !== anexo.id))
-                            } else {
-                              // Remover do banco e storage
-                              if (confirm('Remover este anexo?')) {
-                                try {
-                                  const fileName = anexo.arquivo_url.split('/').pop()
-                                  await supabase.storage
-                                    .from('os-anexos')
-                                    .remove([`${id}/${fileName}`])
-                                  
-                                  await supabase
-                                    .from('os_anexos')
-                                    .update({ ativo: false })
-                                    .eq('id', anexo.id)
-                                  
-                                  setAnexos(prev => prev.filter(a => a.id !== anexo.id))
-                                  toast.success('Anexo removido!')
-                                } catch (error) {
-                                  toast.error('Erro ao remover: ' + error.message)
-                                }
-                              }
-                            }
-                          }}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded"
-                          title="Remover"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <p className="text-xs text-gray-500 mt-3">
-                Adicione manuais, datasheets, diagramas ou vídeos de instrução para a equipe
-              </p>
             </div>
           </div>
         )}
@@ -1092,12 +811,12 @@ const OrdemServicoForm = () => {
               <p className="text-gray-500 text-center py-8">Nenhum serviço adicionado</p>
             ) : (
               <div className="space-y-3">
-                {servicos.map((servico, index) => (
+                {servicos.map((serv, index) => (
                   <div key={index} className="grid grid-cols-12 gap-3 items-end p-3 bg-gray-50 rounded-lg">
                     <div className="col-span-4">
                       <label className="label">Serviço</label>
                       <select
-                        value={servico.servico_id}
+                        value={serv.servico_id}
                         onChange={(e) => updateServico(index, 'servico_id', e.target.value)}
                         className="input-field"
                       >
@@ -1111,18 +830,17 @@ const OrdemServicoForm = () => {
                       <label className="label">Qtd</label>
                       <input
                         type="number"
-                        value={servico.quantidade}
+                        value={serv.quantidade}
                         onChange={(e) => updateServico(index, 'quantidade', e.target.value)}
                         className="input-field"
-                        min="0.01"
-                        step="0.01"
+                        min="1"
                       />
                     </div>
                     <div className="col-span-2">
                       <label className="label">Valor Unit.</label>
                       <input
                         type="number"
-                        value={servico.valor_unitario}
+                        value={serv.valor_unitario}
                         onChange={(e) => updateServico(index, 'valor_unitario', e.target.value)}
                         className="input-field"
                         min="0"
@@ -1133,7 +851,7 @@ const OrdemServicoForm = () => {
                       <label className="label">Total</label>
                       <input
                         type="text"
-                        value={formatCurrency(servico.valor_total)}
+                        value={formatCurrency(serv.valor_total)}
                         className="input-field bg-gray-100"
                         disabled
                       />
@@ -1147,8 +865,8 @@ const OrdemServicoForm = () => {
                 ))}
                 <div className="flex justify-end pt-4 border-t">
                   <div className="text-right">
-                    <p className="text-sm text-gray-500">Total Serviços</p>
-                    <p className="text-xl font-bold text-gray-900">{formatCurrency(totalServicos)}</p>
+                    <p className="text-sm text-gray-500">Total Serviços (Receita)</p>
+                    <p className="text-xl font-bold text-green-600">{formatCurrency(totalServicos)}</p>
                   </div>
                 </div>
               </div>
@@ -1160,7 +878,7 @@ const OrdemServicoForm = () => {
         {activeTab === 'equipe' && (
           <div className="card">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Colaboradores</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Equipe</h2>
               <button type="button" onClick={addColaborador} className="btn-secondary text-sm">
                 <Plus className="w-4 h-4" /> Adicionar Colaborador
               </button>
@@ -1169,61 +887,100 @@ const OrdemServicoForm = () => {
             {colaboradores.length === 0 ? (
               <p className="text-gray-500 text-center py-8">Nenhum colaborador adicionado</p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {colaboradores.map((col, index) => (
-                  <div key={index} className="grid grid-cols-12 gap-3 items-end p-3 bg-gray-50 rounded-lg">
-                    <div className="col-span-4">
-                      <label className="label">Colaborador</label>
-                      <select
-                        value={col.colaborador_id}
-                        onChange={(e) => updateColaborador(index, 'colaborador_id', e.target.value)}
-                        className="input-field"
-                      >
-                        <option value="">Selecione...</option>
-                        {colaboradoresDisponiveis?.map(c => (
-                          <option key={c.id} value={c.id}>{c.nome} {c.funcao?.nome ? `(${c.funcao.nome})` : ''}</option>
-                        ))}
-                      </select>
+                  <div key={index} className="p-4 bg-gray-50 rounded-lg">
+                    <div className="grid grid-cols-12 gap-3 items-end">
+                      <div className="col-span-4">
+                        <label className="label">Colaborador</label>
+                        <select
+                          value={col.colaborador_id}
+                          onChange={(e) => updateColaborador(index, 'colaborador_id', e.target.value)}
+                          className="input-field"
+                        >
+                          <option value="">Selecione...</option>
+                          {colaboradoresDisponiveis?.map(c => (
+                            <option key={c.id} value={c.id}>{c.nome} - {c.funcao?.nome || 'Sem função'}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="label">Diária</label>
+                        <input
+                          type="number"
+                          value={col.valor_diaria}
+                          onChange={(e) => updateColaborador(index, 'valor_diaria', e.target.value)}
+                          className="input-field"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="label">Dias</label>
+                        <input
+                          type="number"
+                          value={col.dias_trabalhados}
+                          onChange={(e) => updateColaborador(index, 'dias_trabalhados', e.target.value)}
+                          className="input-field"
+                          min="0.5"
+                          step="0.5"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <label className="label">Total Diária</label>
+                        <input
+                          type="text"
+                          value={formatCurrency(col.valor_total)}
+                          className="input-field bg-gray-100"
+                          disabled
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <button type="button" onClick={() => removeColaborador(index)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="col-span-2">
-                      <label className="label">Diária</label>
-                      <input
-                        type="number"
-                        value={col.valor_diaria}
-                        onChange={(e) => updateColaborador(index, 'valor_diaria', e.target.value)}
-                        className="input-field"
-                        min="0"
-                        step="0.01"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="label">Dias</label>
-                      <input
-                        type="number"
-                        value={col.dias_trabalhados}
-                        onChange={(e) => updateColaborador(index, 'dias_trabalhados', e.target.value)}
-                        className="input-field"
-                        min="0.5"
-                        step="0.5"
-                      />
-                    </div>
-                    <div className="col-span-3">
-                      <label className="label">Total</label>
-                      <input
-                        type="text"
-                        value={formatCurrency(col.valor_total)}
-                        className="input-field bg-gray-100"
-                        disabled
-                      />
-                    </div>
-                    <div className="col-span-1">
-                      <button type="button" onClick={() => removeColaborador(index)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+
+                    {/* Custos adicionais do colaborador */}
+                    {col.colaborador_id && (col.valor_cafe_dia > 0 || col.valor_almoco_dia > 0 || col.valor_transporte_dia > 0 || col.valor_outros_dia > 0) && (
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <p className="text-xs text-gray-500 mb-2">Custos adicionais por dia trabalhado:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {col.valor_cafe_dia > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs">
+                              <Coffee className="w-3 h-3" /> Café: {formatCurrency(col.valor_cafe_dia)}
+                            </span>
+                          )}
+                          {col.valor_almoco_dia > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded text-xs">
+                              <UtensilsCrossed className="w-3 h-3" /> Almoço: {formatCurrency(col.valor_almoco_dia)}
+                            </span>
+                          )}
+                          {col.valor_transporte_dia > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
+                              Transporte: {formatCurrency(col.valor_transporte_dia)}
+                            </span>
+                          )}
+                          {col.valor_outros_dia > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs">
+                              Outros: {formatCurrency(col.valor_outros_dia)}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-600 mt-2">
+                          Total adicional: {formatCurrency((col.valor_cafe_dia + col.valor_almoco_dia + col.valor_transporte_dia + col.valor_outros_dia) * col.dias_trabalhados)}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ))}
-                <div className="flex justify-end pt-4 border-t">
+                
+                <div className="flex justify-between items-center pt-4 border-t">
+                  <div>
+                    <p className="text-sm text-gray-500">Diárias: {formatCurrency(totalDiarias)}</p>
+                    <p className="text-sm text-gray-500">Alimentação/Transporte: {formatCurrency(custoAlimentacao)}</p>
+                  </div>
                   <div className="text-right">
                     <p className="text-sm text-gray-500">Total Mão de Obra</p>
                     <p className="text-xl font-bold text-gray-900">{formatCurrency(totalMaoObra)}</p>
@@ -1234,7 +991,80 @@ const OrdemServicoForm = () => {
           </div>
         )}
 
-        {/* Tab: Custos */}
+        {/* Tab: Veículo */}
+        {activeTab === 'veiculo' && (
+          <div className="card">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Veículo</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="label">Veículo</label>
+                <select name="veiculo_id" value={formData.veiculo_id} onChange={handleChange} className="input-field">
+                  <option value="">Selecione um veículo...</option>
+                  {veiculos?.map(v => (
+                    <option key={v.id} value={v.id}>{v.modelo} - {v.placa}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label">KM Inicial</label>
+                <input type="number" name="km_inicial" value={formData.km_inicial} onChange={handleChange} className="input-field" min="0" />
+              </div>
+            </div>
+
+            {/* Custos do veículo selecionado */}
+            {veiculoSelecionado && (
+              <div className="mt-6 p-4 bg-gray-50 rounded-xl">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-green-600" />
+                  Custos do Veículo
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-3 bg-white rounded-lg border">
+                    <div className="flex items-center gap-2 text-blue-600 mb-1">
+                      <Car className="w-4 h-4" />
+                      <span className="text-sm font-medium">Aluguel/Dia</span>
+                    </div>
+                    <p className="text-lg font-bold">{formatCurrency(custoVeiculoAluguel)}</p>
+                  </div>
+                  
+                  <div className="p-3 bg-white rounded-lg border">
+                    <div className="flex items-center gap-2 text-orange-600 mb-1">
+                      <Fuel className="w-4 h-4" />
+                      <span className="text-sm font-medium">Gasolina Padrão</span>
+                    </div>
+                    <p className="text-lg font-bold">{formatCurrency(custoVeiculoGasolina)}</p>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-lg border">
+                    <div className="flex items-center gap-2 text-red-600 mb-1">
+                      <Fuel className="w-4 h-4" />
+                      <span className="text-sm font-medium">Gasolina Extra</span>
+                    </div>
+                    <input 
+                      type="text"
+                      name="valor_gasolina_extra"
+                      value={formData.valor_gasolina_extra}
+                      onChange={handleMoneyChange('valor_gasolina_extra')}
+                      className="input-field"
+                      placeholder="R$ 0,00"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Para OS distantes</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg border border-blue-200">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Custo Total do Veículo:</span>
+                    <span className="text-xl font-bold text-gray-900">{formatCurrency(custoVeiculoTotal)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab: Custos Extras */}
         {activeTab === 'custos' && (
           <div className="space-y-6">
             <div className="card">
@@ -1302,63 +1132,152 @@ const OrdemServicoForm = () => {
             </div>
 
             <div className="card">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Valores</h2>
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Valores da OS</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="label">Valor Materiais</label>
-                  <input 
-                    type="text" 
-                    name="valor_materiais" 
-                    value={formData.valor_materiais} 
-                    onChange={handleMoneyChange('valor_materiais')} 
-                    className="input-field" 
-                    placeholder="R$ 0,00"
-                  />
+                  <input type="text" name="valor_materiais" value={formData.valor_materiais} onChange={handleMoneyChange('valor_materiais')} className="input-field" placeholder="R$ 0,00" />
                 </div>
                 <div>
                   <label className="label">Valor Deslocamento</label>
-                  <input 
-                    type="text" 
-                    name="valor_deslocamento" 
-                    value={formData.valor_deslocamento} 
-                    onChange={handleMoneyChange('valor_deslocamento')} 
-                    className="input-field" 
-                    placeholder="R$ 0,00"
-                  />
+                  <input type="text" name="valor_deslocamento" value={formData.valor_deslocamento} onChange={handleMoneyChange('valor_deslocamento')} className="input-field" placeholder="R$ 0,00" />
                 </div>
                 <div>
-                  <label className="label">Valor Total da OS</label>
-                  <input 
-                    type="text" 
-                    name="valor_total" 
-                    value={formData.valor_total} 
-                    onChange={handleMoneyChange('valor_total')} 
-                    className="input-field" 
-                    placeholder={formatCurrency(totalServicos)}
-                  />
+                  <label className="label">Valor Total da OS (Receita)</label>
+                  <input type="text" name="valor_total" value={formData.valor_total} onChange={handleMoneyChange('valor_total')} className="input-field" placeholder={formatCurrency(totalServicos)} />
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Tab: Veículo */}
-        {activeTab === 'veiculo' && (
-          <div className="card">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Veículo</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="label">Veículo</label>
-                <select name="veiculo_id" value={formData.veiculo_id} onChange={handleChange} className="input-field">
-                  <option value="">Selecione um veículo...</option>
-                  {veiculos?.map(v => (
-                    <option key={v.id} value={v.id}>{v.modelo} - {v.placa}</option>
-                  ))}
-                </select>
+        {/* Tab: Resumo Financeiro - NOVA */}
+        {activeTab === 'resumo' && (
+          <div className="space-y-6">
+            {/* Painel Principal */}
+            <div className="card bg-gradient-to-br from-gray-50 to-blue-50">
+              <h2 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <Calculator className="w-5 h-5 text-blue-600" />
+                Resumo Financeiro da OS
+              </h2>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Receita */}
+                <div className="bg-white rounded-xl p-5 border-2 border-green-200">
+                  <div className="flex items-center gap-2 text-green-600 mb-4">
+                    <TrendingUp className="w-5 h-5" />
+                    <h3 className="font-semibold">RECEITA</h3>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Serviços</span>
+                      <span>{formatCurrency(totalServicos)}</span>
+                    </div>
+                    {(parseMoney(formData.valor_total) || 0) !== totalServicos && (parseMoney(formData.valor_total) || 0) > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Valor Ajustado</span>
+                        <span>{formatCurrency(parseMoney(formData.valor_total))}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-green-200">
+                    <div className="flex justify-between">
+                      <span className="font-medium text-green-700">Total Receita</span>
+                      <span className="text-2xl font-bold text-green-600">{formatCurrency(valorReceitaOS)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Custos */}
+                <div className="bg-white rounded-xl p-5 border-2 border-red-200">
+                  <div className="flex items-center gap-2 text-red-600 mb-4">
+                    <TrendingDown className="w-5 h-5" />
+                    <h3 className="font-semibold">CUSTOS</h3>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Diárias</span>
+                      <span>{formatCurrency(totalDiarias)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Alimentação/Transporte</span>
+                      <span>{formatCurrency(custoAlimentacao)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Veículo</span>
+                      <span>{formatCurrency(custoVeiculoTotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Custos Extras</span>
+                      <span>{formatCurrency(totalCustosExtras)}</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-red-200">
+                    <div className="flex justify-between">
+                      <span className="font-medium text-red-700">Total Custos</span>
+                      <span className="text-2xl font-bold text-red-600">{formatCurrency(totalCustos)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Lucro */}
+                <div className={`rounded-xl p-5 border-2 ${lucroPrevisto >= 0 ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300'}`}>
+                  <div className={`flex items-center gap-2 mb-4 ${lucroPrevisto >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                    {lucroPrevisto >= 0 ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                    <h3 className="font-semibold">RESULTADO</h3>
+                  </div>
+                  
+                  <div className="text-center py-4">
+                    <p className={`text-4xl font-bold ${lucroPrevisto >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(lucroPrevisto)}
+                    </p>
+                    <p className={`text-sm mt-2 ${lucroPrevisto >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {lucroPrevisto >= 0 ? 'Lucro Previsto' : 'Prejuízo Previsto'}
+                    </p>
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center justify-center gap-2">
+                      <Percent className="w-4 h-4 text-gray-500" />
+                      <span className="text-sm text-gray-600">Margem de Lucro:</span>
+                      <span className={`font-bold ${margemLucro >= 30 ? 'text-green-600' : margemLucro >= 15 ? 'text-yellow-600' : 'text-red-600'}`}>
+                        {margemLucro.toFixed(1)}%
+                      </span>
+                    </div>
+                    {margemLucro < 30 && margemLucro >= 0 && (
+                      <p className="text-xs text-center text-yellow-600 mt-2">
+                        ⚠️ Margem abaixo do ideal (30%)
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="label">KM Inicial</label>
-                <input type="number" name="km_inicial" value={formData.km_inicial} onChange={handleChange} className="input-field" min="0" />
+
+              {/* Detalhamento */}
+              <div className="mt-6 p-4 bg-white rounded-xl border">
+                <h4 className="font-medium text-gray-700 mb-3">📊 Detalhamento dos Custos</h4>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div className="p-3 bg-blue-50 rounded-lg text-center">
+                    <p className="text-blue-600 font-medium">Mão de Obra</p>
+                    <p className="text-lg font-bold text-blue-700">{formatCurrency(totalMaoObra)}</p>
+                    <p className="text-xs text-blue-500">{totalCustos > 0 ? ((totalMaoObra / totalCustos) * 100).toFixed(0) : 0}% do custo</p>
+                  </div>
+                  <div className="p-3 bg-orange-50 rounded-lg text-center">
+                    <p className="text-orange-600 font-medium">Veículo</p>
+                    <p className="text-lg font-bold text-orange-700">{formatCurrency(custoVeiculoTotal)}</p>
+                    <p className="text-xs text-orange-500">{totalCustos > 0 ? ((custoVeiculoTotal / totalCustos) * 100).toFixed(0) : 0}% do custo</p>
+                  </div>
+                  <div className="p-3 bg-purple-50 rounded-lg text-center">
+                    <p className="text-purple-600 font-medium">Extras</p>
+                    <p className="text-lg font-bold text-purple-700">{formatCurrency(totalCustosExtras)}</p>
+                    <p className="text-xs text-purple-500">{totalCustos > 0 ? ((totalCustosExtras / totalCustos) * 100).toFixed(0) : 0}% do custo</p>
+                  </div>
+                  <div className="p-3 bg-gray-100 rounded-lg text-center">
+                    <p className="text-gray-600 font-medium">Colaboradores</p>
+                    <p className="text-lg font-bold text-gray-700">{colaboradores.length}</p>
+                    <p className="text-xs text-gray-500">pessoas na equipe</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1367,18 +1286,26 @@ const OrdemServicoForm = () => {
         {/* Resumo e Botões */}
         <div className="card bg-gray-50">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex gap-6">
+            <div className="flex flex-wrap gap-6">
               <div>
-                <p className="text-xs text-gray-500">Serviços</p>
-                <p className="font-bold text-gray-900">{formatCurrency(totalServicos)}</p>
+                <p className="text-xs text-gray-500">Receita</p>
+                <p className="font-bold text-green-600">{formatCurrency(valorReceitaOS)}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Mão de Obra</p>
-                <p className="font-bold text-gray-900">{formatCurrency(totalMaoObra)}</p>
+                <p className="text-xs text-gray-500">Custos</p>
+                <p className="font-bold text-red-600">{formatCurrency(totalCustos)}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500">Custos Extras</p>
-                <p className="font-bold text-gray-900">{formatCurrency(totalCustosExtras)}</p>
+                <p className="text-xs text-gray-500">Lucro</p>
+                <p className={`font-bold ${lucroPrevisto >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(lucroPrevisto)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Margem</p>
+                <p className={`font-bold ${margemLucro >= 30 ? 'text-green-600' : margemLucro >= 15 ? 'text-yellow-600' : 'text-red-600'}`}>
+                  {margemLucro.toFixed(1)}%
+                </p>
               </div>
             </div>
             <div className="flex gap-3">

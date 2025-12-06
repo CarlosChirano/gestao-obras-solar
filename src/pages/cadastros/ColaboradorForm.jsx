@@ -15,7 +15,12 @@ import {
   CheckCircle,
   Calendar,
   AlertCircle,
-  Check
+  Check,
+  DollarSign,
+  Coffee,
+  UtensilsCrossed,
+  Bus,
+  Package
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -196,7 +201,12 @@ const ColaboradorForm = () => {
     banco: '',
     agencia: '',
     conta: '',
-    observacoes: ''
+    observacoes: '',
+    // NOVOS CAMPOS DE CUSTOS DIÁRIOS
+    valor_cafe_dia: '',
+    valor_almoco_dia: '',
+    valor_transporte_dia: '',
+    valor_outros_dia: ''
   })
 
   // Certificados
@@ -263,7 +273,12 @@ const ColaboradorForm = () => {
         banco: colaborador.banco || '',
         agencia: colaborador.agencia || '',
         conta: colaborador.conta || '',
-        observacoes: colaborador.observacoes || ''
+        observacoes: colaborador.observacoes || '',
+        // CARREGAR NOVOS CAMPOS DE CUSTOS
+        valor_cafe_dia: formatMoneyFromDB(colaborador.valor_cafe_dia),
+        valor_almoco_dia: formatMoneyFromDB(colaborador.valor_almoco_dia),
+        valor_transporte_dia: formatMoneyFromDB(colaborador.valor_transporte_dia),
+        valor_outros_dia: formatMoneyFromDB(colaborador.valor_outros_dia)
       })
 
       // Carregar certificados
@@ -348,6 +363,12 @@ const ColaboradorForm = () => {
   const handleSalarioChange = (e) => {
     const masked = maskMoney(e.target.value)
     setFormData(prev => ({ ...prev, salario: masked }))
+  }
+
+  // Handler genérico para campos de moeda
+  const handleMoneyChange = (field) => (e) => {
+    const masked = maskMoney(e.target.value)
+    setFormData(prev => ({ ...prev, [field]: masked }))
   }
 
   // Funções para Certificados
@@ -487,7 +508,12 @@ const ColaboradorForm = () => {
         banco: formData.banco,
         agencia: formData.agencia,
         conta: formData.conta,
-        observacoes: formData.observacoes
+        observacoes: formData.observacoes,
+        // SALVAR NOVOS CAMPOS DE CUSTOS
+        valor_cafe_dia: parseMoney(formData.valor_cafe_dia) || 0,
+        valor_almoco_dia: parseMoney(formData.valor_almoco_dia) || 0,
+        valor_transporte_dia: parseMoney(formData.valor_transporte_dia) || 0,
+        valor_outros_dia: parseMoney(formData.valor_outros_dia) || 0
       }
 
       let colaboradorId = id
@@ -578,6 +604,13 @@ const ColaboradorForm = () => {
     }
   }
 
+  // Calcular total de custos diários
+  const totalCustosDiarios = 
+    (parseMoney(formData.valor_cafe_dia) || 0) +
+    (parseMoney(formData.valor_almoco_dia) || 0) +
+    (parseMoney(formData.valor_transporte_dia) || 0) +
+    (parseMoney(formData.valor_outros_dia) || 0)
+
   const estados = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
 
   const tiposCertificado = [
@@ -602,6 +635,7 @@ const ColaboradorForm = () => {
 
   const tabs = [
     { id: 'dados', label: 'Dados Pessoais', icon: User },
+    { id: 'custos', label: 'Custos Diários', icon: DollarSign },
     { id: 'certificados', label: 'Certificados', icon: Award, count: certificados.length },
     { id: 'epis', label: 'EPIs', icon: Shield, count: epis.length },
   ]
@@ -873,6 +907,144 @@ const ColaboradorForm = () => {
             <div className="card">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Observações</h2>
               <textarea name="observacoes" value={formData.observacoes} onChange={handleChange} rows={3} className="input-field" placeholder="Observações gerais sobre o colaborador..." />
+            </div>
+          </div>
+        )}
+
+        {/* Tab: Custos Diários - NOVA ABA */}
+        {activeTab === 'custos' && (
+          <div className="space-y-6">
+            <div className="card">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                  <DollarSign className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Custos Diários do Colaborador</h2>
+                  <p className="text-sm text-gray-500">Valores pagos por dia de trabalho (para cálculo de custos nas OS)</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Café da Manhã */}
+                <div className="p-4 border border-gray-200 rounded-xl hover:border-orange-300 transition-colors">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                      <Coffee className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <div>
+                      <label className="font-medium text-gray-900">Café da Manhã</label>
+                      <p className="text-xs text-gray-500">Valor pago por dia</p>
+                    </div>
+                  </div>
+                  <input 
+                    type="text" 
+                    value={formData.valor_cafe_dia} 
+                    onChange={handleMoneyChange('valor_cafe_dia')} 
+                    className="input-field text-lg" 
+                    placeholder="R$ 0,00"
+                  />
+                </div>
+
+                {/* Almoço */}
+                <div className="p-4 border border-gray-200 rounded-xl hover:border-red-300 transition-colors">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                      <UtensilsCrossed className="w-5 h-5 text-red-600" />
+                    </div>
+                    <div>
+                      <label className="font-medium text-gray-900">Almoço</label>
+                      <p className="text-xs text-gray-500">Valor pago por dia</p>
+                    </div>
+                  </div>
+                  <input 
+                    type="text" 
+                    value={formData.valor_almoco_dia} 
+                    onChange={handleMoneyChange('valor_almoco_dia')} 
+                    className="input-field text-lg" 
+                    placeholder="R$ 0,00"
+                  />
+                </div>
+
+                {/* Transporte */}
+                <div className="p-4 border border-gray-200 rounded-xl hover:border-blue-300 transition-colors">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <Bus className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <label className="font-medium text-gray-900">Transporte</label>
+                      <p className="text-xs text-gray-500">Valor pago por dia</p>
+                    </div>
+                  </div>
+                  <input 
+                    type="text" 
+                    value={formData.valor_transporte_dia} 
+                    onChange={handleMoneyChange('valor_transporte_dia')} 
+                    className="input-field text-lg" 
+                    placeholder="R$ 0,00"
+                  />
+                </div>
+
+                {/* Outros (Gelo, Água, etc) */}
+                <div className="p-4 border border-gray-200 rounded-xl hover:border-purple-300 transition-colors">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <Package className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <label className="font-medium text-gray-900">Outros</label>
+                      <p className="text-xs text-gray-500">Gelo, água, etc</p>
+                    </div>
+                  </div>
+                  <input 
+                    type="text" 
+                    value={formData.valor_outros_dia} 
+                    onChange={handleMoneyChange('valor_outros_dia')} 
+                    className="input-field text-lg" 
+                    placeholder="R$ 0,00"
+                  />
+                </div>
+              </div>
+
+              {/* Resumo */}
+              <div className="mt-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 rounded-xl border border-green-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Total de custos adicionais por dia</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      (além da diária: {valorDiariaFuncao > 0 ? formatMoneyFromDB(valorDiariaFuncao) : 'não definida'})
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-gray-900">
+                      {formatMoneyFromDB(totalCustosDiarios) || 'R$ 0,00'}
+                    </p>
+                    {valorDiariaFuncao > 0 && (
+                      <p className="text-sm text-green-600 font-medium">
+                        Custo total/dia: {formatMoneyFromDB(valorDiariaFuncao + totalCustosDiarios)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Dica informativa */}
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <div className="flex gap-3">
+                <div className="flex-shrink-0">
+                  <AlertCircle className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h4 className="font-medium text-blue-900">Como funciona?</h4>
+                  <p className="text-sm text-blue-700 mt-1">
+                    Esses valores serão usados para calcular automaticamente o custo de cada Ordem de Serviço. 
+                    Quando este colaborador for escalado para uma OS, o sistema somará a diária + esses custos 
+                    para determinar o custo total da mão de obra.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         )}
