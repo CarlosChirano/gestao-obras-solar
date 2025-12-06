@@ -16,7 +16,10 @@ import {
   CreditCard,
   Repeat,
   CheckCircle2,
-  Trash2
+  Trash2,
+  Plus,
+  AlertCircle,
+  CheckCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -102,6 +105,11 @@ const LancamentoForm = () => {
     observacoes: ''
   })
 
+  // Estado para múltiplos clientes vinculados
+  const [clientesVinculados, setClientesVinculados] = useState([])
+  const [novoClienteId, setNovoClienteId] = useState('')
+  const [novoClienteValor, setNovoClienteValor] = useState('')
+
   // Buscar lançamento existente
   const { data: lancamento, isLoading: loadingLancamento } = useQuery({
     queryKey: ['lancamento', id],
@@ -111,6 +119,26 @@ const LancamentoForm = () => {
         .select('*')
         .eq('id', id)
         .single()
+      if (error) throw error
+      return data
+    },
+    enabled: isEdicao
+  })
+
+  // Buscar vínculos existentes
+  const { data: vinculosExistentes } = useQuery({
+    queryKey: ['lancamento-clientes', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('lancamento_clientes')
+        .select(`
+          id,
+          cliente_id,
+          valor,
+          observacao,
+          clientes (id, nome)
+        `)
+        .eq('lancamento_id', id)
       if (error) throw error
       return data
     },
@@ -212,6 +240,70 @@ const LancamentoForm = () => {
     }
   }, [lancamento])
 
+  // Carregar vínculos existentes
+  useEffect(() => {
+    if (vinculosExistentes) {
+      const vinculos = vinculosExistentes.map(v => ({
+        id: v.id,
+        cliente_id: v.cliente_id,
+        cliente_nome: v.clientes?.nome || 'Cliente não encontrado',
+        valor: formatMoneyFromDB(v.valor),
+        observacao: v.observacao || ''
+      }))
+      setClientesVinculados(vinculos)
+    }
+  }, [vinculosExistentes])
+
+  // Calcular soma dos vínculos
+  const calcularSomaVinculos = () => {
+    return clientesVinculados.reduce((soma, cliente) => {
+      const valor = parseMoney(cliente.valor) || 0
+      return soma + valor
+    }, 0)
+  }
+
+  // Adicionar cliente vinculado
+  const adicionarClienteVinculado = () => {
+    if (!novoClienteId) {
+      toast.error('Selecione um cliente')
+      return
+    }
+    if (!novoClienteValor) {
+      toast.error('Informe o valor')
+      return
+    }
+
+    // Verificar se já existe
+    if (clientesVinculados.some(c => c.cliente_id === novoClienteId)) {
+      toast.error('Este cliente já está vinculado')
+      return
+    }
+
+    const clienteSelecionado = clientes?.find(c => c.id === novoClienteId)
+    
+    setClientesVinculados(prev => [...prev, {
+      cliente_id: novoClienteId,
+      cliente_nome: clienteSelecionado?.nome || 'Cliente',
+      valor: novoClienteValor,
+      observacao: ''
+    }])
+
+    setNovoClienteId('')
+    setNovoClienteValor('')
+  }
+
+  // Remover cliente vinculado
+  const removerClienteVinculado = (index) => {
+    setClientesVinculados(prev => prev.filter((_, i) => i !== index))
+  }
+
+  // Atualizar valor de um cliente vinculado
+  const atualizarValorCliente = (index, valor) => {
+    setClientesVinculados(prev => prev.map((c, i) => 
+      i === index ? { ...c, valor: maskMoney(valor) } : c
+    ))
+  }
+
   // Mutation para salvar
   const salvarMutation = useMutation({
     mutationFn: async (dados) => {
@@ -230,6 +322,8 @@ const LancamentoForm = () => {
         frequencia: dados.recorrente ? dados.frequencia : null
       }
 
+      let lancamentoId = id
+
       if (isEdicao) {
         const { error } = await supabase
           .from('lancamentos_financeiros')
@@ -237,10 +331,40 @@ const LancamentoForm = () => {
           .eq('id', id)
         if (error) throw error
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('lancamentos_financeiros')
           .insert(payload)
+          .select('id')
+          .single()
         if (error) throw error
+        lancamentoId = data.id
+      }
+
+      // Salvar vínculos de clientes
+      if (lancamentoId) {
+        // Primeiro, remover vínculos antigos
+        await supabase
+          .from('lancamento_clientes')
+          .delete()
+          .eq('lancamento_id', lancamentoId)
+
+        // Depois, inserir os novos
+        if (clientesVinculados.length > 0) {
+          const vinculos = clientesVinculados.map(c => ({
+            lancamento_id: lancamentoId,
+            cliente_id: c.cliente_id,
+            valor: parseMoney(c.valor) || 0,
+            observacao: c.observacao || null
+          }))
+
+          const { error: vinculosError } = await supabase
+            .from('lancamento_clientes')
+            .insert(vinculos)
+          
+          if (vinculosError) {
+            console.error('Erro ao salvar vínculos:', vinculosError)
+          }
+        }
       }
     },
     onSuccess: () => {
@@ -328,6 +452,17 @@ const LancamentoForm = () => {
   }
 
   const categoriasFiltradas = categorias?.filter(c => c.tipo === formData.tipo) || []
+
+  // Calcular comparação
+  const valorLancamento = parseMoney(formData.valor) || 0
+  const somaVinculos = calcularSomaVinculos()
+  const diferencaValores = Math.abs(valorLancamento - somaVinculos)
+  const valoresConferem = diferencaValores < 0.01 // Tolerância de 1 centavo
+
+  // Clientes disponíveis (que ainda não foram vinculados)
+  const clientesDisponiveis = clientes?.filter(c => 
+    !clientesVinculados.some(cv => cv.cliente_id === c.id)
+  ) || []
 
   if (loadingLancamento) {
     return (
@@ -550,63 +685,205 @@ const LancamentoForm = () => {
           </div>
         </div>
 
-        {/* Vínculos */}
+        {/* Vínculos com Clientes */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Vínculos (Opcional)</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            Vínculos com Clientes
+          </h3>
+          <p className="text-sm text-gray-500 mb-4">
+            Vincule um ou mais clientes a este lançamento com seus respectivos valores.
+          </p>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {formData.tipo === 'receita' && (
+          {/* Adicionar novo cliente */}
+          <div style={{ 
+            backgroundColor: '#f9fafb', 
+            padding: '16px', 
+            borderRadius: '8px',
+            marginBottom: '16px'
+          }}>
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: '1fr 150px auto', 
+              gap: '12px',
+              alignItems: 'flex-end'
+            }}>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Cliente
                 </label>
                 <select
-                  name="cliente_id"
-                  value={formData.cliente_id}
-                  onChange={handleChange}
+                  value={novoClienteId}
+                  onChange={(e) => setNovoClienteId(e.target.value)}
                   className="input"
                 >
-                  <option value="">Selecione...</option>
-                  {clientes?.map((cliente) => (
+                  <option value="">Selecione um cliente...</option>
+                  {clientesDisponiveis.map((cliente) => (
                     <option key={cliente.id} value={cliente.id}>{cliente.nome}</option>
                   ))}
                 </select>
               </div>
-            )}
-
-            {formData.tipo === 'despesa' && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Colaborador
+                  Valor
                 </label>
-                <select
-                  name="colaborador_id"
-                  value={formData.colaborador_id}
-                  onChange={handleChange}
+                <input
+                  type="text"
+                  value={novoClienteValor}
+                  onChange={(e) => setNovoClienteValor(maskMoney(e.target.value))}
                   className="input"
-                >
-                  <option value="">Selecione...</option>
-                  {colaboradores?.map((col) => (
-                    <option key={col.id} value={col.id}>{col.nome}</option>
-                  ))}
-                </select>
+                  placeholder="R$ 0,00"
+                />
               </div>
-            )}
-
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Observações
-              </label>
-              <textarea
-                name="observacoes"
-                value={formData.observacoes}
-                onChange={handleChange}
-                className="input"
-                rows={3}
-                placeholder="Anotações adicionais..."
-              />
+              <button
+                type="button"
+                onClick={adicionarClienteVinculado}
+                className="btn btn-primary flex items-center gap-2"
+                style={{ height: '42px' }}
+              >
+                <Plus className="w-4 h-4" />
+                Adicionar
+              </button>
             </div>
           </div>
+
+          {/* Lista de clientes vinculados */}
+          {clientesVinculados.length > 0 && (
+            <div style={{ marginTop: '16px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                    <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                      Cliente
+                    </th>
+                    <th style={{ textAlign: 'right', padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#374151', width: '180px' }}>
+                      Valor
+                    </th>
+                    <th style={{ width: '60px', padding: '12px 8px' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientesVinculados.map((cliente, index) => (
+                    <tr key={index} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                      <td style={{ padding: '12px 8px', fontSize: '14px', color: '#1f2937' }}>
+                        {cliente.cliente_nome}
+                      </td>
+                      <td style={{ padding: '12px 8px', textAlign: 'right' }}>
+                        <input
+                          type="text"
+                          value={cliente.valor}
+                          onChange={(e) => atualizarValorCliente(index, e.target.value)}
+                          className="input"
+                          style={{ textAlign: 'right', width: '150px' }}
+                        />
+                      </td>
+                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                        <button
+                          type="button"
+                          onClick={() => removerClienteVinculado(index)}
+                          className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Somatório e comparação */}
+              <div style={{ 
+                marginTop: '16px', 
+                padding: '16px', 
+                borderRadius: '8px',
+                backgroundColor: valoresConferem ? '#ecfdf5' : '#fef2f2',
+                border: `2px solid ${valoresConferem ? '#10b981' : '#ef4444'}`
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <span style={{ fontSize: '14px', color: '#6b7280' }}>Valor do Lançamento:</span>
+                  <span style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>
+                    {formData.valor || 'R$ 0,00'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <span style={{ fontSize: '14px', color: '#6b7280' }}>Total dos Vínculos:</span>
+                  <span style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>
+                    {formatMoneyFromDB(somaVinculos)}
+                  </span>
+                </div>
+                <div style={{ 
+                  borderTop: `1px solid ${valoresConferem ? '#10b981' : '#ef4444'}`,
+                  paddingTop: '12px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  {valoresConferem ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#059669' }}>
+                      <CheckCircle className="w-5 h-5" />
+                      <span style={{ fontWeight: '600' }}>Valores conferem!</span>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#dc2626' }}>
+                      <AlertCircle className="w-5 h-5" />
+                      <span style={{ fontWeight: '600' }}>
+                        Diferença de {formatMoneyFromDB(diferencaValores)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {clientesVinculados.length === 0 && (
+            <div style={{ 
+              textAlign: 'center', 
+              padding: '32px', 
+              color: '#9ca3af',
+              backgroundColor: '#f9fafb',
+              borderRadius: '8px'
+            }}>
+              <User className="w-10 h-10 mx-auto mb-2 opacity-50" />
+              <p>Nenhum cliente vinculado</p>
+              <p className="text-sm">Adicione clientes para rastrear valores individuais</p>
+            </div>
+          )}
+        </div>
+
+        {/* Colaborador (para despesas) */}
+        {formData.tipo === 'despesa' && (
+          <div className="card">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Vínculo com Colaborador (Opcional)</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Colaborador
+              </label>
+              <select
+                name="colaborador_id"
+                value={formData.colaborador_id}
+                onChange={handleChange}
+                className="input"
+              >
+                <option value="">Selecione...</option>
+                {colaboradores?.map((col) => (
+                  <option key={col.id} value={col.id}>{col.nome}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* Observações */}
+        <div className="card">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Observações</h3>
+          <textarea
+            name="observacoes"
+            value={formData.observacoes}
+            onChange={handleChange}
+            className="input"
+            rows={3}
+            placeholder="Anotações adicionais..."
+          />
         </div>
 
         {/* Recorrência */}
