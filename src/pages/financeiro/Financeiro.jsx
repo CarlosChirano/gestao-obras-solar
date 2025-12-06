@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { 
   DollarSign, 
   TrendingUp, 
@@ -20,9 +20,22 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  Calendar
+  Calendar,
+  FileText,
+  Users,
+  Car,
+  Wrench,
+  Coffee,
+  Fuel,
+  ClipboardCheck,
+  AlertCircle,
+  Check,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Percent
 } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { Link } from 'react-router-dom'
 import {
@@ -39,10 +52,31 @@ import {
   LineChart,
   Line
 } from 'recharts'
+import toast from 'react-hot-toast'
 
 const Financeiro = () => {
   const [abaAtiva, setAbaAtiva] = useState('visao-geral')
   const [periodoFiltro, setPeriodoFiltro] = useState('mes-atual')
+  
+  // Estados para Fechamento de Período
+  const [dataInicio, setDataInicio] = useState(() => {
+    const d = new Date()
+    d.setDate(1)
+    return d.toISOString().split('T')[0]
+  })
+  const [dataFim, setDataFim] = useState(() => new Date().toISOString().split('T')[0])
+  const [colaboradoresSelecionados, setColaboradoresSelecionados] = useState([])
+  
+  // Estados para DRE
+  const [drePeriodo, setDrePeriodo] = useState('mes-atual')
+  const [dreDataInicio, setDreDataInicio] = useState(() => {
+    const d = new Date()
+    d.setDate(1)
+    return d.toISOString().split('T')[0]
+  })
+  const [dreDataFim, setDreDataFim] = useState(() => new Date().toISOString().split('T')[0])
+  
+  const queryClient = useQueryClient()
 
   // Buscar contas bancárias
   const { data: contasBancarias, isLoading: loadingContas } = useQuery({
@@ -92,6 +126,94 @@ const Financeiro = () => {
     }
   })
 
+  // Buscar Ordens de Serviço para Conciliação
+  const { data: ordensServico, isLoading: loadingOS } = useQuery({
+    queryKey: ['os-conciliacao'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ordens_servico')
+        .select(`
+          *,
+          cliente:clientes(nome),
+          os_servicos(valor_total),
+          os_colaboradores(
+            colaborador_id, 
+            valor_diaria, 
+            dias_trabalhados, 
+            valor_total,
+            colaborador:colaboradores(nome, valor_cafe_dia, valor_almoco_dia, valor_transporte_dia, valor_outros_dia)
+          ),
+          os_custos_extras(valor),
+          veiculo:veiculos(placa, modelo, valor_aluguel_dia, valor_gasolina_dia)
+        `)
+        .in('status', ['concluida', 'em_execucao', 'confirmada'])
+        .order('data_agendamento', { ascending: false })
+      if (error) throw error
+      return data
+    }
+  })
+
+  // Buscar colaboradores com diárias no período (para fechamento)
+  const { data: colaboradoresComDiarias } = useQuery({
+    queryKey: ['colaboradores-diarias', dataInicio, dataFim],
+    queryFn: async () => {
+      const { data: osColabs, error } = await supabase
+        .from('os_colaboradores')
+        .select(`
+          *,
+          colaborador:colaboradores(id, nome, pix, valor_cafe_dia, valor_almoco_dia, valor_transporte_dia, valor_outros_dia),
+          ordem_servico:ordens_servico!inner(id, numero, data_agendamento, status, cliente:clientes(nome))
+        `)
+        .gte('ordem_servico.data_agendamento', dataInicio)
+        .lte('ordem_servico.data_agendamento', dataFim)
+        .in('ordem_servico.status', ['concluida', 'em_execucao', 'confirmada'])
+      
+      if (error) throw error
+      
+      // Agrupar por colaborador
+      const agrupado = {}
+      osColabs?.forEach(oc => {
+        const colabId = oc.colaborador?.id
+        if (!colabId) return
+        
+        if (!agrupado[colabId]) {
+          agrupado[colabId] = {
+            colaborador: oc.colaborador,
+            oss: [],
+            totalDiarias: 0,
+            totalValorDiarias: 0,
+            totalAlimentacao: 0,
+            diasTrabalhados: 0
+          }
+        }
+        
+        const dias = parseFloat(oc.dias_trabalhados) || 0
+        const valorDiaria = parseFloat(oc.valor_total) || 0
+        const cafe = (parseFloat(oc.colaborador?.valor_cafe_dia) || 0) * dias
+        const almoco = (parseFloat(oc.colaborador?.valor_almoco_dia) || 0) * dias
+        const transporte = (parseFloat(oc.colaborador?.valor_transporte_dia) || 0) * dias
+        const outros = (parseFloat(oc.colaborador?.valor_outros_dia) || 0) * dias
+        const alimentacao = cafe + almoco + transporte + outros
+        
+        agrupado[colabId].oss.push({
+          numero: oc.ordem_servico?.numero,
+          cliente: oc.ordem_servico?.cliente?.nome,
+          data: oc.ordem_servico?.data_agendamento,
+          dias,
+          valorDiaria,
+          alimentacao
+        })
+        
+        agrupado[colabId].diasTrabalhados += dias
+        agrupado[colabId].totalValorDiarias += valorDiaria
+        agrupado[colabId].totalAlimentacao += alimentacao
+      })
+      
+      return Object.values(agrupado)
+    },
+    enabled: abaAtiva === 'fechamento'
+  })
+
   // Cálculos do período
   const hoje = new Date()
   const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
@@ -121,7 +243,6 @@ const Financeiro = () => {
     .filter(l => l.tipo === 'despesa' && l.status === 'pago')
     .reduce((sum, l) => sum + (parseFloat(l.valor) || 0), 0)
 
-  // Pendentes
   const receitasPendentes = lancamentosMes
     .filter(l => l.tipo === 'receita' && l.status === 'pendente')
     .reduce((sum, l) => sum + (parseFloat(l.valor) || 0), 0)
@@ -130,7 +251,6 @@ const Financeiro = () => {
     .filter(l => l.tipo === 'despesa' && l.status === 'pendente')
     .reduce((sum, l) => sum + (parseFloat(l.valor) || 0), 0)
 
-  // Atrasados
   const lancamentosAtrasados = lancamentos?.filter(l => {
     const data = new Date(l.data_vencimento)
     return data < hoje && l.status === 'pendente'
@@ -139,8 +259,106 @@ const Financeiro = () => {
   const valorAtrasado = lancamentosAtrasados
     .reduce((sum, l) => sum + (parseFloat(l.valor) || 0), 0)
 
-  // Saldo total das contas
   const saldoTotal = contasBancarias?.reduce((sum, c) => sum + (parseFloat(c.saldo_atual) || 0), 0) || 0
+
+  // Calcular dados das OS para conciliação
+  const osComCalculos = useMemo(() => {
+    return ordensServico?.map(os => {
+      // Receita (serviços)
+      const receita = os.valor_total || os.os_servicos?.reduce((sum, s) => sum + (parseFloat(s.valor_total) || 0), 0) || 0
+      
+      // Custos de mão de obra (diárias)
+      const custoDiarias = os.os_colaboradores?.reduce((sum, c) => sum + (parseFloat(c.valor_total) || 0), 0) || 0
+      
+      // Custos de alimentação
+      const custoAlimentacao = os.os_colaboradores?.reduce((sum, c) => {
+        const dias = parseFloat(c.dias_trabalhados) || 0
+        const cafe = parseFloat(c.colaborador?.valor_cafe_dia) || 0
+        const almoco = parseFloat(c.colaborador?.valor_almoco_dia) || 0
+        const transporte = parseFloat(c.colaborador?.valor_transporte_dia) || 0
+        const outros = parseFloat(c.colaborador?.valor_outros_dia) || 0
+        return sum + (dias * (cafe + almoco + transporte + outros))
+      }, 0) || 0
+      
+      // Custos de veículo
+      const custoVeiculo = (parseFloat(os.veiculo?.valor_aluguel_dia) || 0) + 
+                          (parseFloat(os.veiculo?.valor_gasolina_dia) || 0) +
+                          (parseFloat(os.valor_gasolina_extra) || 0)
+      
+      // Custos extras
+      const custosExtras = os.os_custos_extras?.reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0) || 0
+      
+      // Total de custos
+      const totalCustos = custoDiarias + custoAlimentacao + custoVeiculo + custosExtras
+      
+      // Lucro
+      const lucro = receita - totalCustos
+      const margem = receita > 0 ? (lucro / receita) * 100 : 0
+      
+      return {
+        ...os,
+        receita,
+        custoDiarias,
+        custoAlimentacao,
+        custoVeiculo,
+        custosExtras,
+        totalCustos,
+        lucro,
+        margem
+      }
+    }) || []
+  }, [ordensServico])
+
+  // Dados para DRE
+  const dadosDRE = useMemo(() => {
+    let inicio, fim
+    
+    if (drePeriodo === 'mes-atual') {
+      inicio = inicioMes
+      fim = fimMes
+    } else if (drePeriodo === 'mes-anterior') {
+      inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1)
+      fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0)
+    } else if (drePeriodo === 'ano-atual') {
+      inicio = new Date(hoje.getFullYear(), 0, 1)
+      fim = new Date(hoje.getFullYear(), 11, 31)
+    } else {
+      inicio = new Date(dreDataInicio)
+      fim = new Date(dreDataFim)
+    }
+    
+    // Filtrar OS do período
+    const osPeriodo = osComCalculos.filter(os => {
+      const data = new Date(os.data_agendamento)
+      return data >= inicio && data <= fim && os.status === 'concluida'
+    })
+    
+    // Receitas
+    const receitaServicos = osPeriodo.reduce((sum, os) => sum + os.receita, 0)
+    
+    // Custos
+    const custoMaoObra = osPeriodo.reduce((sum, os) => sum + os.custoDiarias, 0)
+    const custoAlimentacao = osPeriodo.reduce((sum, os) => sum + os.custoAlimentacao, 0)
+    const custoVeiculos = osPeriodo.reduce((sum, os) => sum + os.custoVeiculo, 0)
+    const custoExtras = osPeriodo.reduce((sum, os) => sum + os.custosExtras, 0)
+    
+    const totalCustos = custoMaoObra + custoAlimentacao + custoVeiculos + custoExtras
+    const lucroOperacional = receitaServicos - totalCustos
+    const margemOperacional = receitaServicos > 0 ? (lucroOperacional / receitaServicos) * 100 : 0
+    
+    return {
+      periodo: { inicio, fim },
+      quantidadeOS: osPeriodo.length,
+      receitaServicos,
+      custoMaoObra,
+      custoAlimentacao,
+      custoVeiculos,
+      custoExtras,
+      totalCustos,
+      lucroOperacional,
+      margemOperacional
+    }
+  }, [osComCalculos, drePeriodo, dreDataInicio, dreDataFim])
 
   // Dados para gráficos
   const dadosPorCategoria = () => {
@@ -231,7 +449,10 @@ const Financeiro = () => {
     { id: 'visao-geral', label: 'Visão Geral', icon: BarChart3 },
     { id: 'lancamentos', label: 'Lançamentos', icon: Receipt },
     { id: 'contas', label: 'Contas', icon: Building2 },
-    { id: 'conciliacao', label: 'Conciliação', icon: GitCompare },
+    { id: 'conciliacao-obras', label: 'Conciliação de Obras', icon: ClipboardCheck },
+    { id: 'dre', label: 'DRE', icon: FileText },
+    { id: 'fechamento', label: 'Fechamento de Período', icon: Users },
+    { id: 'conciliacao', label: 'Conciliação Bancária', icon: GitCompare },
   ]
 
   if (loadingContas || loadingLancamentos) {
@@ -293,7 +514,6 @@ const Financeiro = () => {
         <div className="space-y-6">
           {/* Cards Principais */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Saldo em Contas */}
             <div className="card">
               <div className="flex items-center justify-between">
                 <div>
@@ -306,12 +526,8 @@ const Financeiro = () => {
                   <Wallet className="w-6 h-6 text-blue-600" />
                 </div>
               </div>
-              <div className="mt-3 text-sm text-gray-500">
-                {contasBancarias?.length || 0} contas ativas
-              </div>
             </div>
 
-            {/* Receitas do Mês */}
             <div className="card">
               <div className="flex items-center justify-between">
                 <div>
@@ -322,16 +538,8 @@ const Financeiro = () => {
                   <ArrowUpCircle className="w-6 h-6 text-green-600" />
                 </div>
               </div>
-              <div className="mt-3 flex items-center gap-2 text-sm">
-                <span className="text-green-600">{formatCurrencyShort(receitasPagas)}</span>
-                <span className="text-gray-400">recebido</span>
-                <span className="text-gray-300">|</span>
-                <span className="text-yellow-600">{formatCurrencyShort(receitasPendentes)}</span>
-                <span className="text-gray-400">a receber</span>
-              </div>
             </div>
 
-            {/* Despesas do Mês */}
             <div className="card">
               <div className="flex items-center justify-between">
                 <div>
@@ -342,16 +550,8 @@ const Financeiro = () => {
                   <ArrowDownCircle className="w-6 h-6 text-red-600" />
                 </div>
               </div>
-              <div className="mt-3 flex items-center gap-2 text-sm">
-                <span className="text-red-600">{formatCurrencyShort(despesasPagas)}</span>
-                <span className="text-gray-400">pago</span>
-                <span className="text-gray-300">|</span>
-                <span className="text-yellow-600">{formatCurrencyShort(despesasPendentes)}</span>
-                <span className="text-gray-400">a pagar</span>
-              </div>
             </div>
 
-            {/* Saldo do Mês */}
             <div className="card">
               <div className="flex items-center justify-between">
                 <div>
@@ -361,171 +561,48 @@ const Financeiro = () => {
                   </p>
                 </div>
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${saldoMes >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
-                  {saldoMes >= 0 ? (
-                    <TrendingUp className="w-6 h-6 text-green-600" />
-                  ) : (
-                    <TrendingDown className="w-6 h-6 text-red-600" />
-                  )}
+                  {saldoMes >= 0 ? <TrendingUp className="w-6 h-6 text-green-600" /> : <TrendingDown className="w-6 h-6 text-red-600" />}
                 </div>
               </div>
-              {lancamentosAtrasados.length > 0 && (
-                <div className="mt-3 flex items-center gap-2 text-sm text-red-600">
-                  <AlertTriangle className="w-4 h-4" />
-                  {lancamentosAtrasados.length} atrasados ({formatCurrencyShort(valorAtrasado)})
-                </div>
-              )}
             </div>
           </div>
 
           {/* Gráficos */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Fluxo de Caixa */}
             <div className="card">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Fluxo de Caixa (6 meses)</h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={fluxoCaixaMensal()}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                    <XAxis dataKey="mes" tick={{ fontSize: 12, fill: '#6B7280' }} />
-                    <YAxis tick={{ fontSize: 12, fill: '#6B7280' }} tickFormatter={(v) => formatCurrencyShort(v)} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="receitas" name="Receitas" fill="#22C55E" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="despesas" name="Despesas" fill="#EF4444" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <h3 className="text-lg font-semibold mb-4">Fluxo de Caixa</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={fluxoCaixaMensal()}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="mes" />
+                  <YAxis tickFormatter={(v) => formatCurrencyShort(v)} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="receitas" name="Receitas" fill="#22c55e" />
+                  <Bar dataKey="despesas" name="Despesas" fill="#ef4444" />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
 
-            {/* Por Categoria */}
             <div className="card">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Por Categoria (mês atual)</h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dadosPorCategoria()} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                    <XAxis type="number" tick={{ fontSize: 12, fill: '#6B7280' }} tickFormatter={(v) => formatCurrencyShort(v)} />
-                    <YAxis type="category" dataKey="nome" tick={{ fontSize: 11, fill: '#6B7280' }} width={100} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="receita" name="Receita" fill="#22C55E" radius={[0, 4, 4, 0]} />
-                    <Bar dataKey="despesa" name="Despesa" fill="#EF4444" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-
-          {/* Contas Bancárias */}
-          <div className="card">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Contas Bancárias</h3>
-              <Link to="/financeiro/contas/nova" className="text-sm text-blue-600 hover:underline">
-                Adicionar conta →
-              </Link>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {contasBancarias?.map((conta) => (
-                <div 
-                  key={conta.id} 
-                  className="p-4 rounded-lg border border-gray-200"
-                  style={{ borderLeftWidth: '4px', borderLeftColor: conta.cor }}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-gray-900">{conta.nome}</p>
-                      <p className="text-sm text-gray-500">{conta.banco}</p>
-                    </div>
-                    <Building2 className="w-5 h-5 text-gray-400" />
-                  </div>
-                  <p className={`text-xl font-bold mt-2 ${parseFloat(conta.saldo_atual) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatCurrency(conta.saldo_atual)}
-                  </p>
-                </div>
-              ))}
-              {(!contasBancarias || contasBancarias.length === 0) && (
-                <div className="col-span-full text-center py-8 text-gray-500">
-                  Nenhuma conta cadastrada
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Próximos Vencimentos */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* A Receber */}
-            <div className="card">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <ArrowUpCircle className="w-5 h-5 text-green-600" />
-                Próximos a Receber
-              </h3>
-              <div className="space-y-2">
-                {lancamentos
-                  ?.filter(l => l.tipo === 'receita' && l.status === 'pendente')
-                  .slice(0, 5)
-                  .map((l) => (
-                    <Link
-                      key={l.id}
-                      to={`/financeiro/${l.id}`}
-                      className="flex items-center justify-between p-3 bg-green-50 rounded-lg hover:bg-green-100"
-                    >
-                      <div>
-                        <p className="font-medium text-gray-900">{l.descricao}</p>
-                        <p className="text-sm text-gray-500">
-                          {l.cliente?.nome || l.categoria?.nome || 'Sem categoria'}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium text-green-600">{formatCurrency(l.valor)}</p>
-                        <p className="text-sm text-gray-500">{formatDate(l.data_vencimento)}</p>
-                      </div>
-                    </Link>
-                  ))
-                }
-                {lancamentos?.filter(l => l.tipo === 'receita' && l.status === 'pendente').length === 0 && (
-                  <p className="text-gray-500 text-center py-4">Nenhum valor a receber</p>
-                )}
-              </div>
-            </div>
-
-            {/* A Pagar */}
-            <div className="card">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <ArrowDownCircle className="w-5 h-5 text-red-600" />
-                Próximos a Pagar
-              </h3>
-              <div className="space-y-2">
-                {lancamentos
-                  ?.filter(l => l.tipo === 'despesa' && l.status === 'pendente')
-                  .sort((a, b) => new Date(a.data_vencimento) - new Date(b.data_vencimento))
-                  .slice(0, 5)
-                  .map((l) => {
-                    const atrasado = new Date(l.data_vencimento) < hoje
-                    return (
-                      <Link
-                        key={l.id}
-                        to={`/financeiro/${l.id}`}
-                        className={`flex items-center justify-between p-3 rounded-lg ${atrasado ? 'bg-red-50 hover:bg-red-100' : 'bg-gray-50 hover:bg-gray-100'}`}
-                      >
-                        <div>
-                          <p className="font-medium text-gray-900">{l.descricao}</p>
-                          <p className="text-sm text-gray-500">
-                            {l.colaborador?.nome || l.categoria?.nome || 'Sem categoria'}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium text-red-600">{formatCurrency(l.valor)}</p>
-                          <p className={`text-sm ${atrasado ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
-                            {atrasado && <AlertTriangle className="w-3 h-3 inline mr-1" />}
-                            {formatDate(l.data_vencimento)}
-                          </p>
-                        </div>
-                      </Link>
-                    )
-                  })
-                }
-                {lancamentos?.filter(l => l.tipo === 'despesa' && l.status === 'pendente').length === 0 && (
-                  <p className="text-gray-500 text-center py-4">Nenhum valor a pagar</p>
-                )}
-              </div>
+              <h3 className="text-lg font-semibold mb-4">Por Categoria</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={dadosPorCategoria()}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    dataKey="despesa"
+                    nameKey="nome"
+                    label={({ nome, percent }) => `${nome} (${(percent * 100).toFixed(0)}%)`}
+                  >
+                    {dadosPorCategoria().map((entry, index) => (
+                      <Cell key={index} fill={entry.cor} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => formatCurrency(value)} />
+                </PieChart>
+              </ResponsiveContainer>
             </div>
           </div>
         </div>
@@ -533,20 +610,8 @@ const Financeiro = () => {
 
       {abaAtiva === 'lancamentos' && (
         <div className="space-y-4">
-          {/* Filtros */}
           <div className="card">
-            <div className="flex flex-wrap gap-4">
-              <select
-                value={periodoFiltro}
-                onChange={(e) => setPeriodoFiltro(e.target.value)}
-                className="input w-auto"
-              >
-                <option value="mes-atual">Mês Atual</option>
-                <option value="mes-anterior">Mês Anterior</option>
-                <option value="ultimos-90">Últimos 90 dias</option>
-                <option value="ano-atual">Ano Atual</option>
-                <option value="todos">Todos</option>
-              </select>
+            <div className="flex flex-wrap items-center gap-4">
               <select className="input w-auto">
                 <option value="">Todos os tipos</option>
                 <option value="receita">Receitas</option>
@@ -557,12 +622,10 @@ const Financeiro = () => {
                 <option value="pendente">Pendente</option>
                 <option value="pago">Pago</option>
                 <option value="atrasado">Atrasado</option>
-                <option value="cancelado">Cancelado</option>
               </select>
             </div>
           </div>
 
-          {/* Lista de Lançamentos */}
           <div className="card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -571,7 +634,6 @@ const Financeiro = () => {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vencimento</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Categoria</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Conta</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor</th>
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
                   </tr>
@@ -590,12 +652,6 @@ const Financeiro = () => {
                           <Link to={`/financeiro/${l.id}`} className="font-medium text-gray-900 hover:text-blue-600">
                             {l.descricao}
                           </Link>
-                          {l.cliente?.nome && (
-                            <p className="text-sm text-gray-500">{l.cliente.nome}</p>
-                          )}
-                          {l.colaborador?.nome && (
-                            <p className="text-sm text-gray-500">{l.colaborador.nome}</p>
-                          )}
                         </td>
                         <td className="px-4 py-3">
                           <span 
@@ -605,23 +661,18 @@ const Financeiro = () => {
                             {l.categoria?.nome || 'Sem categoria'}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {l.conta?.nome || '-'}
-                        </td>
                         <td className={`px-4 py-3 text-right font-medium ${l.tipo === 'receita' ? 'text-green-600' : 'text-red-600'}`}>
                           {l.tipo === 'receita' ? '+' : '-'} {formatCurrency(l.valor)}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
                             l.status === 'pago' ? 'bg-green-100 text-green-700' :
-                            l.status === 'pendente' && atrasado ? 'bg-red-100 text-red-700' :
-                            l.status === 'pendente' ? 'bg-yellow-100 text-yellow-700' :
-                            l.status === 'cancelado' ? 'bg-gray-100 text-gray-700' :
-                            'bg-gray-100 text-gray-700'
+                            atrasado ? 'bg-red-100 text-red-700' :
+                            'bg-yellow-100 text-yellow-700'
                           }`}>
                             {l.status === 'pago' && <CheckCircle2 className="w-3 h-3" />}
                             {l.status === 'pendente' && !atrasado && <Clock className="w-3 h-3" />}
-                            {l.status === 'pendente' && atrasado && <AlertTriangle className="w-3 h-3" />}
+                            {atrasado && <AlertTriangle className="w-3 h-3" />}
                             {atrasado ? 'Atrasado' : l.status.charAt(0).toUpperCase() + l.status.slice(1)}
                           </span>
                         </td>
@@ -631,11 +682,6 @@ const Financeiro = () => {
                 </tbody>
               </table>
             </div>
-            {(!lancamentos || lancamentos.length === 0) && (
-              <div className="text-center py-8 text-gray-500">
-                Nenhum lançamento encontrado
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -660,11 +706,6 @@ const Financeiro = () => {
                   <div>
                     <h3 className="font-semibold text-gray-900">{conta.nome}</h3>
                     <p className="text-sm text-gray-500">{conta.banco}</p>
-                    {conta.agencia && (
-                      <p className="text-xs text-gray-400 mt-1">
-                        Ag: {conta.agencia} | Conta: {conta.conta}
-                      </p>
-                    )}
                   </div>
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center`} style={{ backgroundColor: `${conta.cor}20` }}>
                     <Building2 className="w-5 h-5" style={{ color: conta.cor }} />
@@ -679,13 +720,425 @@ const Financeiro = () => {
               </Link>
             ))}
           </div>
-          {(!contasBancarias || contasBancarias.length === 0) && (
+        </div>
+      )}
+
+      {/* NOVA ABA: Conciliação de Obras */}
+      {abaAtiva === 'conciliacao-obras' && (
+        <div className="space-y-6">
+          {/* Cards de resumo */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div className="card bg-green-50 border-green-200">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="w-8 h-8 text-green-600" />
+                <div>
+                  <p className="text-sm text-green-700">Com Lucro</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {osComCalculos.filter(os => os.lucro > 0).length}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="card bg-yellow-50 border-yellow-200">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="w-8 h-8 text-yellow-600" />
+                <div>
+                  <p className="text-sm text-yellow-700">Margem Baixa (&lt;15%)</p>
+                  <p className="text-2xl font-bold text-yellow-600">
+                    {osComCalculos.filter(os => os.margem > 0 && os.margem < 15).length}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="card bg-red-50 border-red-200">
+              <div className="flex items-center gap-3">
+                <X className="w-8 h-8 text-red-600" />
+                <div>
+                  <p className="text-sm text-red-700">Com Prejuízo</p>
+                  <p className="text-2xl font-bold text-red-600">
+                    {osComCalculos.filter(os => os.lucro < 0).length}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="card bg-blue-50 border-blue-200">
+              <div className="flex items-center gap-3">
+                <DollarSign className="w-8 h-8 text-blue-600" />
+                <div>
+                  <p className="text-sm text-blue-700">Lucro Total</p>
+                  <p className="text-xl font-bold text-blue-600">
+                    {formatCurrencyShort(osComCalculos.reduce((sum, os) => sum + os.lucro, 0))}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabela de OS */}
+          <div className="card overflow-hidden">
+            <h3 className="text-lg font-semibold mb-4">Ordens de Serviço</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">OS</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Receita</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Custos</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Lucro</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Margem</th>
+                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {osComCalculos.slice(0, 30).map((os) => (
+                    <tr key={os.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <Link to={`/ordens-servico/${os.id}`} className="font-medium text-blue-600 hover:underline">
+                          {os.numero}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-gray-900">{os.cliente?.nome}</td>
+                      <td className="px-4 py-3 text-gray-600">{formatDate(os.data_agendamento)}</td>
+                      <td className="px-4 py-3 text-right text-green-600 font-medium">{formatCurrency(os.receita)}</td>
+                      <td className="px-4 py-3 text-right text-red-600">{formatCurrency(os.totalCustos)}</td>
+                      <td className={`px-4 py-3 text-right font-bold ${os.lucro >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatCurrency(os.lucro)}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          os.margem >= 30 ? 'bg-green-100 text-green-700' :
+                          os.margem >= 15 ? 'bg-yellow-100 text-yellow-700' :
+                          os.margem >= 0 ? 'bg-orange-100 text-orange-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>
+                          {os.margem.toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {os.lucro >= 0 && os.margem >= 15 ? (
+                          <CheckCircle2 className="w-5 h-5 text-green-500 mx-auto" />
+                        ) : os.lucro >= 0 ? (
+                          <AlertCircle className="w-5 h-5 text-yellow-500 mx-auto" />
+                        ) : (
+                          <X className="w-5 h-5 text-red-500 mx-auto" />
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NOVA ABA: DRE */}
+      {abaAtiva === 'dre' && (
+        <div className="space-y-6">
+          {/* Filtro de período */}
+          <div className="card">
+            <div className="flex flex-wrap items-center gap-4">
+              <select 
+                value={drePeriodo} 
+                onChange={(e) => setDrePeriodo(e.target.value)}
+                className="input w-auto"
+              >
+                <option value="mes-atual">Mês Atual</option>
+                <option value="mes-anterior">Mês Anterior</option>
+                <option value="ano-atual">Ano Atual</option>
+                <option value="personalizado">Personalizado</option>
+              </select>
+              
+              {drePeriodo === 'personalizado' && (
+                <>
+                  <input 
+                    type="date" 
+                    value={dreDataInicio}
+                    onChange={(e) => setDreDataInicio(e.target.value)}
+                    className="input w-auto"
+                  />
+                  <span className="text-gray-500">até</span>
+                  <input 
+                    type="date" 
+                    value={dreDataFim}
+                    onChange={(e) => setDreDataFim(e.target.value)}
+                    className="input w-auto"
+                  />
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* DRE */}
+          <div className="card">
+            <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+              <FileText className="w-6 h-6 text-blue-600" />
+              Demonstrativo de Resultado do Exercício
+            </h3>
+            
+            <p className="text-sm text-gray-500 mb-6">
+              Período: {formatDate(dadosDRE.periodo.inicio)} a {formatDate(dadosDRE.periodo.fim)} | 
+              {dadosDRE.quantidadeOS} OS concluídas
+            </p>
+
+            <div className="space-y-4">
+              {/* Receitas */}
+              <div className="p-4 bg-green-50 rounded-xl">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-green-600" />
+                    <span className="font-semibold text-green-800">RECEITA OPERACIONAL</span>
+                  </div>
+                  <span className="text-2xl font-bold text-green-600">{formatCurrency(dadosDRE.receitaServicos)}</span>
+                </div>
+                <div className="mt-2 text-sm text-green-700">
+                  Serviços executados em {dadosDRE.quantidadeOS} OS
+                </div>
+              </div>
+
+              {/* Custos */}
+              <div className="p-4 bg-red-50 rounded-xl">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex items-center gap-2">
+                    <TrendingDown className="w-5 h-5 text-red-600" />
+                    <span className="font-semibold text-red-800">CUSTOS OPERACIONAIS</span>
+                  </div>
+                  <span className="text-2xl font-bold text-red-600">-{formatCurrency(dadosDRE.totalCustos)}</span>
+                </div>
+                
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between py-2 border-b border-red-200">
+                    <span className="flex items-center gap-2 text-gray-700">
+                      <Users className="w-4 h-4" /> Mão de Obra (Diárias)
+                    </span>
+                    <span className="text-red-600">-{formatCurrency(dadosDRE.custoMaoObra)}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-red-200">
+                    <span className="flex items-center gap-2 text-gray-700">
+                      <Coffee className="w-4 h-4" /> Alimentação/Transporte
+                    </span>
+                    <span className="text-red-600">-{formatCurrency(dadosDRE.custoAlimentacao)}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-red-200">
+                    <span className="flex items-center gap-2 text-gray-700">
+                      <Car className="w-4 h-4" /> Veículos
+                    </span>
+                    <span className="text-red-600">-{formatCurrency(dadosDRE.custoVeiculos)}</span>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <span className="flex items-center gap-2 text-gray-700">
+                      <Wrench className="w-4 h-4" /> Custos Extras
+                    </span>
+                    <span className="text-red-600">-{formatCurrency(dadosDRE.custoExtras)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Resultado */}
+              <div className={`p-6 rounded-xl ${dadosDRE.lucroOperacional >= 0 ? 'bg-gradient-to-r from-green-100 to-blue-100' : 'bg-gradient-to-r from-red-100 to-orange-100'}`}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="text-lg font-bold text-gray-800">LUCRO OPERACIONAL</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Percent className="w-4 h-4 text-gray-500" />
+                      <span className={`text-sm font-medium ${dadosDRE.margemOperacional >= 30 ? 'text-green-600' : dadosDRE.margemOperacional >= 15 ? 'text-yellow-600' : 'text-red-600'}`}>
+                        Margem: {dadosDRE.margemOperacional.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                  <span className={`text-3xl font-bold ${dadosDRE.lucroOperacional >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(dadosDRE.lucroOperacional)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Gráfico de composição */}
+          <div className="card">
+            <h3 className="text-lg font-semibold mb-4">Composição dos Custos</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: 'Mão de Obra', value: dadosDRE.custoMaoObra, cor: '#3b82f6' },
+                    { name: 'Alimentação', value: dadosDRE.custoAlimentacao, cor: '#f97316' },
+                    { name: 'Veículos', value: dadosDRE.custoVeiculos, cor: '#22c55e' },
+                    { name: 'Extras', value: dadosDRE.custoExtras, cor: '#8b5cf6' }
+                  ].filter(d => d.value > 0)}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={100}
+                  dataKey="value"
+                  nameKey="name"
+                  label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                >
+                  {[
+                    { cor: '#3b82f6' },
+                    { cor: '#f97316' },
+                    { cor: '#22c55e' },
+                    { cor: '#8b5cf6' }
+                  ].map((entry, index) => (
+                    <Cell key={index} fill={entry.cor} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value) => formatCurrency(value)} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* NOVA ABA: Fechamento de Período */}
+      {abaAtiva === 'fechamento' && (
+        <div className="space-y-6">
+          {/* Filtro de período */}
+          <div className="card">
+            <h3 className="text-lg font-semibold mb-4">Selecione o Período</h3>
+            <div className="flex flex-wrap items-center gap-4">
+              <div>
+                <label className="label">Data Início</label>
+                <input 
+                  type="date" 
+                  value={dataInicio}
+                  onChange={(e) => setDataInicio(e.target.value)}
+                  className="input"
+                />
+              </div>
+              <div>
+                <label className="label">Data Fim</label>
+                <input 
+                  type="date" 
+                  value={dataFim}
+                  onChange={(e) => setDataFim(e.target.value)}
+                  className="input"
+                />
+              </div>
+              <div className="flex gap-2 pt-6">
+                <button 
+                  onClick={() => {
+                    const hoje = new Date()
+                    if (hoje.getDate() <= 15) {
+                      setDataInicio(new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split('T')[0])
+                      setDataFim(new Date(hoje.getFullYear(), hoje.getMonth(), 15).toISOString().split('T')[0])
+                    } else {
+                      setDataInicio(new Date(hoje.getFullYear(), hoje.getMonth(), 16).toISOString().split('T')[0])
+                      setDataFim(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).toISOString().split('T')[0])
+                    }
+                  }}
+                  className="btn-secondary text-sm"
+                >
+                  Quinzena Atual
+                </button>
+                <button 
+                  onClick={() => {
+                    const hoje = new Date()
+                    setDataInicio(new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().split('T')[0])
+                    setDataFim(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).toISOString().split('T')[0])
+                  }}
+                  className="btn-secondary text-sm"
+                >
+                  Mês Atual
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Lista de colaboradores */}
+          {colaboradoresComDiarias?.length > 0 ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Colaboradores no Período</h3>
+                <div className="text-right">
+                  <p className="text-sm text-gray-500">Total a Pagar</p>
+                  <p className="text-2xl font-bold text-red-600">
+                    {formatCurrency(colaboradoresComDiarias.reduce((sum, c) => sum + c.totalValorDiarias + c.totalAlimentacao, 0))}
+                  </p>
+                </div>
+              </div>
+
+              {colaboradoresComDiarias.map((item) => (
+                <div key={item.colaborador.id} className="card">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                        <Users className="w-6 h-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900">{item.colaborador.nome}</h4>
+                        <p className="text-sm text-gray-500">
+                          {item.diasTrabalhados} dias trabalhados | {item.oss.length} OS
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-gray-900">
+                        {formatCurrency(item.totalValorDiarias + item.totalAlimentacao)}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Diárias: {formatCurrency(item.totalValorDiarias)} | Alimentação: {formatCurrency(item.totalAlimentacao)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Detalhes das OS */}
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-xs text-gray-500 mb-2">Ordens de Serviço:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {item.oss.map((os, idx) => (
+                        <span key={idx} className="inline-flex items-center gap-1 px-2 py-1 bg-white rounded border text-xs">
+                          <span className="font-medium">{os.numero}</span>
+                          <span className="text-gray-400">|</span>
+                          <span className="text-gray-600">{os.dias} dia(s)</span>
+                          <span className="text-gray-400">|</span>
+                          <span className="text-green-600">{formatCurrency(os.valorDiaria + os.alimentacao)}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {item.colaborador.pix && (
+                    <div className="mt-3 pt-3 border-t">
+                      <p className="text-xs text-gray-500">PIX: <span className="font-medium text-gray-700">{item.colaborador.pix}</span></p>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Resumo final */}
+              <div className="card bg-gradient-to-r from-blue-50 to-green-50">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600">Colaboradores</p>
+                    <p className="text-2xl font-bold text-gray-900">{colaboradoresComDiarias.length}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600">Total Diárias</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {formatCurrency(colaboradoresComDiarias.reduce((sum, c) => sum + c.totalValorDiarias, 0))}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600">Total Alimentação</p>
+                    <p className="text-2xl font-bold text-orange-600">
+                      {formatCurrency(colaboradoresComDiarias.reduce((sum, c) => sum + c.totalAlimentacao, 0))}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600">Total a Pagar</p>
+                    <p className="text-2xl font-bold text-red-600">
+                      {formatCurrency(colaboradoresComDiarias.reduce((sum, c) => sum + c.totalValorDiarias + c.totalAlimentacao, 0))}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
             <div className="card text-center py-12">
-              <Building2 className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-              <p className="text-gray-500 mb-4">Nenhuma conta bancária cadastrada</p>
-              <Link to="/financeiro/contas/nova" className="btn btn-primary">
-                Cadastrar Primeira Conta
-              </Link>
+              <Users className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+              <p className="text-gray-500">Nenhum colaborador trabalhou neste período</p>
             </div>
           )}
         </div>
