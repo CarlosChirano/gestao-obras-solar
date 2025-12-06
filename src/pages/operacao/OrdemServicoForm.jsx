@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Save, Loader2, Plus, Trash2, MapPin, Calendar, Users, Wrench, DollarSign, Car } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, Plus, Trash2, MapPin, Calendar, Users, Wrench, DollarSign, Car, FileText, Image, Video, Upload, Eye, X, Navigation, Crosshair } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 // ============================================
@@ -95,6 +95,8 @@ const OrdemServicoForm = () => {
     cidade: '',
     estado: '',
     cep: '',
+    latitude: '',
+    longitude: '',
     valor_total: '',
     valor_mao_obra: '',
     valor_materiais: '',
@@ -115,6 +117,10 @@ const OrdemServicoForm = () => {
   
   // Custos extras
   const [custosExtras, setCustosExtras] = useState([])
+  
+  // Anexos da OS (para upload durante criação)
+  const [anexos, setAnexos] = useState([])
+  const [uploadingAnexo, setUploadingAnexo] = useState(false)
 
   // Buscar dados auxiliares
   const { data: clientes } = useQuery({
@@ -197,6 +203,8 @@ const OrdemServicoForm = () => {
         cidade: os.cidade || '',
         estado: os.estado || '',
         cep: os.cep || '',
+        latitude: os.latitude || '',
+        longitude: os.longitude || '',
         valor_total: formatMoneyFromDB(os.valor_total),
         valor_mao_obra: os.valor_mao_obra || '',
         valor_materiais: formatMoneyFromDB(os.valor_materiais),
@@ -208,6 +216,14 @@ const OrdemServicoForm = () => {
         veiculo_id: os.veiculo_id || '',
         km_inicial: os.km_inicial || ''
       })
+
+      // Carregar anexos existentes
+      const { data: osAnexos } = await supabase
+        .from('os_anexos')
+        .select('*')
+        .eq('ordem_servico_id', id)
+        .eq('ativo', true)
+      setAnexos(osAnexos || [])
 
       // Carregar serviços
       const { data: osServicos } = await supabase
@@ -381,6 +397,8 @@ const OrdemServicoForm = () => {
         cidade: formData.cidade,
         estado: formData.estado,
         cep: formData.cep,
+        latitude: formData.latitude ? parseFloat(formData.latitude) : null,
+        longitude: formData.longitude ? parseFloat(formData.longitude) : null,
         valor_total: parseMoney(formData.valor_total) || totalServicos,
         valor_mao_obra: totalMaoObra,
         valor_materiais: parseMoney(formData.valor_materiais) || 0,
@@ -458,6 +476,37 @@ const OrdemServicoForm = () => {
           valor: parseFloat(c.valor) || 0
         }))
         await supabase.from('os_custos_extras').insert(custosData)
+      }
+
+      // Upload dos anexos pendentes (apenas para OS nova)
+      const anexosPendentes = anexos.filter(a => a.isTemp && a.file)
+      if (anexosPendentes.length > 0) {
+        for (const anexo of anexosPendentes) {
+          const fileExt = anexo.arquivo_nome.split('.').pop().toLowerCase()
+          const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`
+          const filePath = `${osId}/${fileName}`
+          
+          const { error: uploadError } = await supabase.storage
+            .from('os-anexos')
+            .upload(filePath, anexo.file)
+          
+          if (!uploadError) {
+            const { data: { publicUrl } } = supabase.storage
+              .from('os-anexos')
+              .getPublicUrl(filePath)
+            
+            await supabase
+              .from('os_anexos')
+              .insert({
+                ordem_servico_id: osId,
+                nome: anexo.nome,
+                tipo: anexo.tipo,
+                arquivo_url: publicUrl,
+                arquivo_nome: anexo.arquivo_nome,
+                arquivo_tamanho: anexo.arquivo_tamanho
+              })
+          }
+        }
       }
 
       toast.success(isEditing ? 'OS atualizada!' : 'OS criada!')
@@ -623,6 +672,69 @@ const OrdemServicoForm = () => {
                   <input type="text" name="cep" value={formData.cep} onChange={handleChange} className="input-field" placeholder="00000-000" />
                 </div>
               </div>
+              
+              {/* Coordenadas GPS */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="label flex items-center gap-2 mb-0">
+                    <Crosshair className="w-4 h-4 text-blue-600" />
+                    Coordenadas GPS (opcional)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                          (position) => {
+                            setFormData(prev => ({
+                              ...prev,
+                              latitude: position.coords.latitude.toFixed(6),
+                              longitude: position.coords.longitude.toFixed(6)
+                            }))
+                            toast.success('Localização capturada!')
+                          },
+                          (error) => {
+                            toast.error('Erro ao obter localização: ' + error.message)
+                          }
+                        )
+                      } else {
+                        toast.error('Geolocalização não suportada')
+                      }
+                    }}
+                    className="btn-secondary text-xs"
+                  >
+                    <Navigation className="w-4 h-4" />
+                    Usar minha localização
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="label text-sm">Latitude</label>
+                    <input 
+                      type="text" 
+                      name="latitude" 
+                      value={formData.latitude} 
+                      onChange={handleChange} 
+                      className="input-field" 
+                      placeholder="-23.550520" 
+                    />
+                  </div>
+                  <div>
+                    <label className="label text-sm">Longitude</label>
+                    <input 
+                      type="text" 
+                      name="longitude" 
+                      value={formData.longitude} 
+                      onChange={handleChange} 
+                      className="input-field" 
+                      placeholder="-46.633308" 
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Coordenadas são mais precisas para navegação em áreas rurais ou locais novos
+                </p>
+              </div>
             </div>
 
             <div className="card">
@@ -637,6 +749,194 @@ const OrdemServicoForm = () => {
                   <textarea name="observacoes_internas" value={formData.observacoes_internas} onChange={handleChange} rows={3} className="input-field" />
                 </div>
               </div>
+            </div>
+
+            {/* Documentos e Instruções */}
+            <div className="card">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                  Documentos e Instruções
+                </h2>
+                <label className="btn-secondary text-sm cursor-pointer">
+                  <Upload className="w-4 h-4" />
+                  Adicionar Arquivo
+                  <input
+                    type="file"
+                    className="hidden"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.mp4,.mov,.avi,.webm"
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files)
+                      if (files.length === 0) return
+                      
+                      setUploadingAnexo(true)
+                      
+                      try {
+                        for (const file of files) {
+                          const fileExt = file.name.split('.').pop().toLowerCase()
+                          const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`
+                          
+                          // Determinar tipo
+                          let tipo = 'outro'
+                          if (['pdf'].includes(fileExt)) tipo = 'pdf'
+                          else if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(fileExt)) tipo = 'imagem'
+                          else if (['mp4', 'mov', 'avi', 'webm'].includes(fileExt)) tipo = 'video'
+                          
+                          // Validar tamanho (máx 50MB)
+                          if (file.size > 50 * 1024 * 1024) {
+                            toast.error(`${file.name} é muito grande (máx 50MB)`)
+                            continue
+                          }
+                          
+                          // Para OS nova, guardar temporariamente
+                          // Para OS existente, fazer upload imediato
+                          if (isEditing && id) {
+                            const filePath = `${id}/${fileName}`
+                            const { error: uploadError } = await supabase.storage
+                              .from('os-anexos')
+                              .upload(filePath, file)
+                            
+                            if (uploadError) throw uploadError
+                            
+                            const { data: { publicUrl } } = supabase.storage
+                              .from('os-anexos')
+                              .getPublicUrl(filePath)
+                            
+                            const { error: dbError } = await supabase
+                              .from('os_anexos')
+                              .insert({
+                                ordem_servico_id: id,
+                                nome: file.name.replace(`.${fileExt}`, ''),
+                                tipo,
+                                arquivo_url: publicUrl,
+                                arquivo_nome: file.name,
+                                arquivo_tamanho: file.size
+                              })
+                            
+                            if (dbError) throw dbError
+                            
+                            // Recarregar anexos
+                            const { data: osAnexos } = await supabase
+                              .from('os_anexos')
+                              .select('*')
+                              .eq('ordem_servico_id', id)
+                              .eq('ativo', true)
+                            setAnexos(osAnexos || [])
+                          } else {
+                            // Para OS nova, guardar localmente para upload após salvar
+                            setAnexos(prev => [...prev, {
+                              id: `temp-${Date.now()}-${Math.random()}`,
+                              nome: file.name.replace(`.${fileExt}`, ''),
+                              tipo,
+                              arquivo_nome: file.name,
+                              arquivo_tamanho: file.size,
+                              file: file, // Guardar o arquivo para upload posterior
+                              isTemp: true
+                            }])
+                          }
+                        }
+                        
+                        toast.success(`${files.length} arquivo(s) adicionado(s)!`)
+                      } catch (error) {
+                        console.error('Erro no upload:', error)
+                        toast.error('Erro ao enviar: ' + error.message)
+                      } finally {
+                        setUploadingAnexo(false)
+                        e.target.value = '' // Limpar input
+                      }
+                    }}
+                    disabled={uploadingAnexo}
+                  />
+                </label>
+              </div>
+
+              {uploadingAnexo && (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                  <span className="ml-2 text-gray-600">Enviando...</span>
+                </div>
+              )}
+
+              {anexos.length === 0 ? (
+                <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+                  <FileText className="w-10 h-10 mx-auto text-gray-300 mb-2" />
+                  <p className="text-gray-500 text-sm">Nenhum documento anexado</p>
+                  <p className="text-gray-400 text-xs mt-1">PDFs, fotos ou vídeos de instrução</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {anexos.map((anexo) => (
+                    <div
+                      key={anexo.id}
+                      className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200"
+                    >
+                      <div className="w-10 h-10 flex items-center justify-center bg-white rounded-lg border">
+                        {anexo.tipo === 'pdf' && <FileText className="w-5 h-5 text-red-500" />}
+                        {anexo.tipo === 'imagem' && <Image className="w-5 h-5 text-blue-500" />}
+                        {anexo.tipo === 'video' && <Video className="w-5 h-5 text-purple-500" />}
+                        {anexo.tipo === 'outro' && <FileText className="w-5 h-5 text-gray-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-gray-900 text-sm truncate">{anexo.nome}</p>
+                        <p className="text-xs text-gray-500">
+                          {anexo.tipo.toUpperCase()} • {anexo.arquivo_tamanho ? (anexo.arquivo_tamanho / 1024 / 1024).toFixed(1) + ' MB' : '-'}
+                          {anexo.isTemp && <span className="ml-1 text-orange-500">(pendente)</span>}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {!anexo.isTemp && anexo.arquivo_url && (
+                          <button
+                            type="button"
+                            onClick={() => window.open(anexo.arquivo_url, '_blank')}
+                            className="p-1.5 text-blue-500 hover:bg-blue-50 rounded"
+                            title="Visualizar"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (anexo.isTemp) {
+                              // Remover apenas do estado local
+                              setAnexos(prev => prev.filter(a => a.id !== anexo.id))
+                            } else {
+                              // Remover do banco e storage
+                              if (confirm('Remover este anexo?')) {
+                                try {
+                                  const fileName = anexo.arquivo_url.split('/').pop()
+                                  await supabase.storage
+                                    .from('os-anexos')
+                                    .remove([`${id}/${fileName}`])
+                                  
+                                  await supabase
+                                    .from('os_anexos')
+                                    .update({ ativo: false })
+                                    .eq('id', anexo.id)
+                                  
+                                  setAnexos(prev => prev.filter(a => a.id !== anexo.id))
+                                  toast.success('Anexo removido!')
+                                } catch (error) {
+                                  toast.error('Erro ao remover: ' + error.message)
+                                }
+                              }
+                            }
+                          }}
+                          className="p-1.5 text-red-500 hover:bg-red-50 rounded"
+                          title="Remover"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-xs text-gray-500 mt-3">
+                Adicione manuais, datasheets, diagramas ou vídeos de instrução para a equipe
+              </p>
             </div>
           </div>
         )}

@@ -247,24 +247,35 @@ const OrdemServicoDetalhes = () => {
             </div>
             
             {/* Botão Me Leve para a Obra */}
-            {(os.endereco || os.cidade) && (
+            {(os.endereco || os.cidade || (os.latitude && os.longitude)) && (
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   onClick={() => {
-                    const endereco = encodeURIComponent(
-                      `${os.endereco || ''}, ${os.cidade || ''}, ${os.estado || ''}, Brasil`
-                    )
-                    // Detecta se é mobile
+                    // Prioriza coordenadas se disponíveis
+                    const hasCoords = os.latitude && os.longitude
                     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
                     
-                    if (isMobile) {
-                      // Tenta abrir o Waze, se não conseguir abre Google Maps
-                      const wazeUrl = `https://waze.com/ul?q=${endereco}&navigate=yes`
-                      window.open(wazeUrl, '_blank')
+                    if (hasCoords) {
+                      // Usar coordenadas (mais preciso)
+                      if (isMobile) {
+                        const wazeUrl = `https://waze.com/ul?ll=${os.latitude},${os.longitude}&navigate=yes`
+                        window.open(wazeUrl, '_blank')
+                      } else {
+                        const mapsUrl = `https://www.google.com/maps?q=${os.latitude},${os.longitude}`
+                        window.open(mapsUrl, '_blank')
+                      }
                     } else {
-                      // Desktop: abre Google Maps
-                      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${endereco}`
-                      window.open(mapsUrl, '_blank')
+                      // Usar endereço
+                      const endereco = encodeURIComponent(
+                        `${os.endereco || ''}, ${os.cidade || ''}, ${os.estado || ''}, Brasil`
+                      )
+                      if (isMobile) {
+                        const wazeUrl = `https://waze.com/ul?q=${endereco}&navigate=yes`
+                        window.open(wazeUrl, '_blank')
+                      } else {
+                        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${endereco}`
+                        window.open(mapsUrl, '_blank')
+                      }
                     }
                   }}
                   className="flex-1 sm:flex-none btn-primary bg-green-600 hover:bg-green-700"
@@ -275,11 +286,17 @@ const OrdemServicoDetalhes = () => {
                 
                 <button
                   onClick={() => {
-                    const endereco = encodeURIComponent(
-                      `${os.endereco || ''}, ${os.cidade || ''}, ${os.estado || ''}, Brasil`
-                    )
-                    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${endereco}`
-                    window.open(mapsUrl, '_blank')
+                    const hasCoords = os.latitude && os.longitude
+                    if (hasCoords) {
+                      const mapsUrl = `https://www.google.com/maps?q=${os.latitude},${os.longitude}`
+                      window.open(mapsUrl, '_blank')
+                    } else {
+                      const endereco = encodeURIComponent(
+                        `${os.endereco || ''}, ${os.cidade || ''}, ${os.estado || ''}, Brasil`
+                      )
+                      const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${endereco}`
+                      window.open(mapsUrl, '_blank')
+                    }
                   }}
                   className="flex-1 sm:flex-none btn-secondary"
                 >
@@ -289,11 +306,17 @@ const OrdemServicoDetalhes = () => {
                 
                 <button
                   onClick={() => {
-                    const endereco = encodeURIComponent(
-                      `${os.endereco || ''}, ${os.cidade || ''}, ${os.estado || ''}, Brasil`
-                    )
-                    const wazeUrl = `https://waze.com/ul?q=${endereco}&navigate=yes`
-                    window.open(wazeUrl, '_blank')
+                    const hasCoords = os.latitude && os.longitude
+                    if (hasCoords) {
+                      const wazeUrl = `https://waze.com/ul?ll=${os.latitude},${os.longitude}&navigate=yes`
+                      window.open(wazeUrl, '_blank')
+                    } else {
+                      const endereco = encodeURIComponent(
+                        `${os.endereco || ''}, ${os.cidade || ''}, ${os.estado || ''}, Brasil`
+                      )
+                      const wazeUrl = `https://waze.com/ul?q=${endereco}&navigate=yes`
+                      window.open(wazeUrl, '_blank')
+                    }
                   }}
                   className="flex-1 sm:flex-none btn-secondary"
                 >
@@ -301,6 +324,13 @@ const OrdemServicoDetalhes = () => {
                   Waze
                 </button>
               </div>
+            )}
+            
+            {/* Mostrar coordenadas se disponíveis */}
+            {os.latitude && os.longitude && (
+              <p className="text-xs text-gray-500 mt-2">
+                📍 Coordenadas: {os.latitude}, {os.longitude}
+              </p>
             )}
           </div>
 
