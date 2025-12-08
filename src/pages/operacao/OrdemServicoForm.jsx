@@ -5,7 +5,8 @@ import { supabase } from '../../lib/supabase'
 import { 
   ArrowLeft, Save, Loader2, Plus, Trash2, MapPin, Calendar, Users, Wrench, 
   DollarSign, Car, FileText, Image, Video, Upload, Eye, X, Navigation, 
-  Crosshair, ClipboardCheck, CalendarDays 
+  Crosshair, ClipboardCheck, CalendarDays, CheckCircle, AlertTriangle,
+  Receipt, TrendingUp, TrendingDown
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DiarioObra from './DiarioObra'
@@ -61,6 +62,11 @@ const OrdemServicoForm = () => {
   const [loadingData, setLoadingData] = useState(false)
   const [activeTab, setActiveTab] = useState('dados')
 
+  // Modal de confirmação de lançamentos
+  const [showLancamentosModal, setShowLancamentosModal] = useState(false)
+  const [lancamentosPreview, setLancamentosPreview] = useState(null)
+  const [statusAnterior, setStatusAnterior] = useState('')
+
   // Dados básicos da OS
   const [formData, setFormData] = useState({
     cliente_id: '',
@@ -69,7 +75,7 @@ const OrdemServicoForm = () => {
     empresa_contratante_id: '',
     data_agendamento: '',
     previsao_duracao: '',
-    previsao_dias: 1, // NOVO CAMPO
+    previsao_dias: 1,
     endereco: '',
     cidade: '',
     estado: '',
@@ -105,10 +111,10 @@ const OrdemServicoForm = () => {
   const [enderecosObra, setEnderecosObra] = useState([])
   const [loadingEnderecos, setLoadingEnderecos] = useState(false)
 
-  // NOVO: Checklists selecionados para a OS
+  // Checklists selecionados para a OS
   const [checklistsSelecionados, setChecklistsSelecionados] = useState([])
 
-  // NOVO: Dados completos da OS para o DiarioObra
+  // Dados completos da OS para o DiarioObra
   const [ordemServicoCompleta, setOrdemServicoCompleta] = useState(null)
 
   // Buscar clientes
@@ -153,7 +159,7 @@ const OrdemServicoForm = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('colaboradores')
-        .select('id, nome, funcao:funcoes(id, nome, valor_diaria), valor_cafe_dia, valor_almoco_dia, valor_transporte_dia, valor_outros_dia')
+        .select('id, nome, pix, funcao:funcoes(id, nome, valor_diaria), valor_cafe_dia, valor_almoco_dia, valor_transporte_dia, valor_outros_dia')
         .eq('ativo', true)
         .order('nome')
       return data
@@ -169,13 +175,26 @@ const OrdemServicoForm = () => {
     }
   })
 
-  // NOVO: Buscar modelos de checklist
+  // Buscar modelos de checklist
   const { data: checklistModelos } = useQuery({
     queryKey: ['checklist-modelos'],
     queryFn: async () => {
       const { data } = await supabase
         .from('checklist_modelos')
         .select('id, nome, descricao, tipo')
+        .eq('ativo', true)
+        .order('nome')
+      return data
+    }
+  })
+
+  // Buscar contas bancárias para os lançamentos
+  const { data: contasBancarias } = useQuery({
+    queryKey: ['contas-bancarias'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('contas_bancarias')
+        .select('id, nome, tipo')
         .eq('ativo', true)
         .order('nome')
       return data
@@ -191,7 +210,6 @@ const OrdemServicoForm = () => {
   const loadOrdemServico = async () => {
     setLoadingData(true)
     try {
-      // Carregar OS
       const { data: os, error } = await supabase
         .from('ordens_servico')
         .select('*')
@@ -201,6 +219,7 @@ const OrdemServicoForm = () => {
       if (error) throw error
 
       setOrdemServicoCompleta(os)
+      setStatusAnterior(os.status)
 
       setFormData({
         cliente_id: os.cliente_id || '',
@@ -228,7 +247,6 @@ const OrdemServicoForm = () => {
         km_inicial: os.km_inicial || ''
       })
 
-      // Carregar endereços de obra do cliente
       if (os.cliente_id) {
         const { data: enderecosData } = await supabase
           .from('cliente_enderecos')
@@ -240,7 +258,6 @@ const OrdemServicoForm = () => {
         setEnderecosObra(enderecosData || [])
       }
 
-      // Carregar anexos existentes
       const { data: osAnexos } = await supabase
         .from('os_anexos')
         .select('*')
@@ -248,7 +265,6 @@ const OrdemServicoForm = () => {
         .eq('ativo', true)
       setAnexos(osAnexos || [])
 
-      // Carregar serviços
       const { data: osServicos } = await supabase
         .from('os_servicos')
         .select('*, servico:servicos(nome)')
@@ -259,19 +275,18 @@ const OrdemServicoForm = () => {
         servico_nome: s.servico?.nome
       })) || [])
 
-      // Carregar colaboradores
       const { data: osColaboradores } = await supabase
         .from('os_colaboradores')
-        .select('*, colaborador:colaboradores(nome), funcao:funcoes(nome)')
+        .select('*, colaborador:colaboradores(nome, pix), funcao:funcoes(nome)')
         .eq('ordem_servico_id', id)
 
       setColaboradores(osColaboradores?.map(c => ({
         ...c,
         colaborador_nome: c.colaborador?.nome,
+        colaborador_pix: c.colaborador?.pix,
         funcao_nome: c.funcao?.nome
       })) || [])
 
-      // Carregar custos extras
       const { data: osCustos } = await supabase
         .from('os_custos_extras')
         .select('*')
@@ -279,7 +294,6 @@ const OrdemServicoForm = () => {
 
       setCustosExtras(osCustos || [])
 
-      // NOVO: Carregar checklists selecionados
       const { data: osChecklists } = await supabase
         .from('os_checklists')
         .select('*, checklist_modelo:checklist_modelos(id, nome)')
@@ -435,8 +449,14 @@ const OrdemServicoForm = () => {
         updated[index].funcao_id = col.funcao?.id || ''
         updated[index].valor_diaria = col.funcao?.valor_diaria || 0
         updated[index].colaborador_nome = col.nome
+        updated[index].colaborador_pix = col.pix
         updated[index].funcao_nome = col.funcao?.nome
         updated[index].valor_total = (updated[index].dias_trabalhados || 1) * (col.funcao?.valor_diaria || 0)
+        // Guardar valores de alimentação
+        updated[index].valor_cafe = col.valor_cafe_dia || 0
+        updated[index].valor_almoco = col.valor_almoco_dia || 0
+        updated[index].valor_transporte = col.valor_transporte_dia || 0
+        updated[index].valor_outros = col.valor_outros_dia || 0
       }
     }
 
@@ -471,7 +491,7 @@ const OrdemServicoForm = () => {
     setCustosExtras(custosExtras.filter((_, i) => i !== index))
   }
 
-  // NOVO: Funções para Checklists
+  // Funções para Checklists
   const addChecklist = (tipo) => {
     setChecklistsSelecionados([...checklistsSelecionados, {
       checklist_modelo_id: '',
@@ -499,6 +519,196 @@ const OrdemServicoForm = () => {
   const totalServicos = servicos.reduce((sum, s) => sum + (parseFloat(s.valor_total) || 0), 0)
   const totalMaoObra = colaboradores.reduce((sum, c) => sum + (parseFloat(c.valor_total) || 0), 0)
   const totalCustosExtras = custosExtras.reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0)
+
+  // ============================================
+  // LANÇAMENTOS AUTOMÁTICOS
+  // ============================================
+
+  const calcularLancamentos = () => {
+    const cliente = clientes?.find(c => c.id === formData.cliente_id)
+    const veiculo = veiculos?.find(v => v.id === formData.veiculo_id)
+    const numeroOS = ordemServicoCompleta?.numero_os || 'Nova OS'
+    
+    const lancamentos = {
+      receitas: [],
+      despesas: [],
+      totalReceitas: 0,
+      totalDespesas: 0,
+      lucro: 0
+    }
+
+    // 1. RECEITA - Valor total dos serviços
+    if (totalServicos > 0) {
+      lancamentos.receitas.push({
+        tipo: 'receita',
+        categoria: 'Serviços',
+        descricao: `${numeroOS} - ${cliente?.nome || 'Cliente'}`,
+        valor: totalServicos,
+        data_vencimento: new Date().toISOString().split('T')[0],
+        status: 'pendente'
+      })
+      lancamentos.totalReceitas += totalServicos
+    }
+
+    // 2. DESPESAS - Colaboradores (diárias + alimentação)
+    colaboradores.forEach(colab => {
+      if (!colab.colaborador_id) return
+      
+      const dias = parseFloat(colab.dias_trabalhados) || 0
+      const valorDiaria = parseFloat(colab.valor_diaria) || 0
+      const totalDiarias = dias * valorDiaria
+      
+      // Buscar dados completos do colaborador
+      const colabCompleto = colaboradoresDisponiveis?.find(c => c.id === colab.colaborador_id)
+      
+      // Calcular alimentação
+      const cafe = (parseFloat(colabCompleto?.valor_cafe_dia) || 0) * dias
+      const almoco = (parseFloat(colabCompleto?.valor_almoco_dia) || 0) * dias
+      const transporte = (parseFloat(colabCompleto?.valor_transporte_dia) || 0) * dias
+      const outros = (parseFloat(colabCompleto?.valor_outros_dia) || 0) * dias
+      const totalAlimentacao = cafe + almoco + transporte + outros
+      
+      const totalColaborador = totalDiarias + totalAlimentacao
+
+      if (totalColaborador > 0) {
+        lancamentos.despesas.push({
+          tipo: 'despesa',
+          categoria: 'Mão de Obra',
+          descricao: `${colab.colaborador_nome || 'Colaborador'} - ${numeroOS}`,
+          valor: totalColaborador,
+          detalhe: {
+            diarias: totalDiarias,
+            alimentacao: totalAlimentacao,
+            dias: dias,
+            pix: colab.colaborador_pix || colabCompleto?.pix
+          },
+          data_vencimento: new Date().toISOString().split('T')[0],
+          status: 'pendente',
+          colaborador_id: colab.colaborador_id
+        })
+        lancamentos.totalDespesas += totalColaborador
+      }
+    })
+
+    // 3. DESPESA - Veículo
+    if (veiculo && formData.veiculo_id) {
+      const dias = parseInt(formData.previsao_dias) || 1
+      const aluguel = (parseFloat(veiculo.valor_aluguel_dia) || 0) * dias
+      const gasolina = (parseFloat(veiculo.valor_gasolina_dia) || 0) * dias
+      const totalVeiculo = aluguel + gasolina
+
+      if (totalVeiculo > 0) {
+        lancamentos.despesas.push({
+          tipo: 'despesa',
+          categoria: 'Veículos',
+          descricao: `${veiculo.modelo} (${veiculo.placa}) - ${numeroOS}`,
+          valor: totalVeiculo,
+          detalhe: {
+            aluguel: aluguel,
+            gasolina: gasolina,
+            dias: dias
+          },
+          data_vencimento: new Date().toISOString().split('T')[0],
+          status: 'pendente',
+          veiculo_id: formData.veiculo_id
+        })
+        lancamentos.totalDespesas += totalVeiculo
+      }
+    }
+
+    // 4. DESPESAS - Custos Extras
+    custosExtras.forEach(custo => {
+      const valor = parseFloat(custo.valor) || 0
+      if (valor > 0) {
+        lancamentos.despesas.push({
+          tipo: 'despesa',
+          categoria: custo.tipo === 'material' ? 'Materiais' : 
+                     custo.tipo === 'alimentacao' ? 'Alimentação' :
+                     custo.tipo === 'hospedagem' ? 'Hospedagem' :
+                     custo.tipo === 'combustivel' ? 'Combustível' :
+                     custo.tipo === 'pedagio' ? 'Pedágio' : 'Outros',
+          descricao: `${custo.descricao || custo.tipo} - ${numeroOS}`,
+          valor: valor,
+          data_vencimento: new Date().toISOString().split('T')[0],
+          status: 'pendente'
+        })
+        lancamentos.totalDespesas += valor
+      }
+    })
+
+    lancamentos.lucro = lancamentos.totalReceitas - lancamentos.totalDespesas
+
+    return lancamentos
+  }
+
+  const gerarLancamentosFinanceiros = async (osId) => {
+    const lancamentos = calcularLancamentos()
+    const numeroOS = ordemServicoCompleta?.numero_os || `OS-${osId}`
+    
+    // Conta padrão (primeira conta ativa)
+    const contaPadrao = contasBancarias?.[0]?.id
+
+    try {
+      // Inserir receitas
+      for (const receita of lancamentos.receitas) {
+        await supabase.from('lancamentos').insert({
+          tipo: 'receita',
+          categoria: receita.categoria,
+          descricao: receita.descricao,
+          valor: receita.valor,
+          data_vencimento: receita.data_vencimento,
+          status: 'pendente',
+          ordem_servico_id: osId,
+          conta_bancaria_id: contaPadrao
+        })
+      }
+
+      // Inserir despesas
+      for (const despesa of lancamentos.despesas) {
+        await supabase.from('lancamentos').insert({
+          tipo: 'despesa',
+          categoria: despesa.categoria,
+          descricao: despesa.descricao,
+          valor: despesa.valor,
+          data_vencimento: despesa.data_vencimento,
+          status: 'pendente',
+          ordem_servico_id: osId,
+          conta_bancaria_id: contaPadrao,
+          colaborador_id: despesa.colaborador_id || null
+        })
+      }
+
+      return true
+    } catch (error) {
+      console.error('Erro ao gerar lançamentos:', error)
+      throw error
+    }
+  }
+
+  // Verificar se deve mostrar modal de lançamentos
+  const handleStatusChange = (e) => {
+    const novoStatus = e.target.value
+    
+    // Se está mudando para "concluida" e não estava antes
+    if (novoStatus === 'concluida' && statusAnterior !== 'concluida') {
+      const lancamentos = calcularLancamentos()
+      setLancamentosPreview(lancamentos)
+      setShowLancamentosModal(true)
+      // Não muda o status ainda, espera confirmação
+    } else {
+      setFormData(prev => ({ ...prev, status: novoStatus }))
+    }
+  }
+
+  const confirmarConclusao = () => {
+    setFormData(prev => ({ ...prev, status: 'concluida' }))
+    setShowLancamentosModal(false)
+  }
+
+  const cancelarConclusao = () => {
+    setShowLancamentosModal(false)
+    setLancamentosPreview(null)
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -603,7 +813,7 @@ const OrdemServicoForm = () => {
         await supabase.from('os_custos_extras').insert(custosData)
       }
 
-      // NOVO: Inserir checklists selecionados
+      // Inserir checklists selecionados
       if (checklistsSelecionados.length > 0) {
         const checklistsData = checklistsSelecionados
           .filter(c => c.checklist_modelo_id)
@@ -649,7 +859,14 @@ const OrdemServicoForm = () => {
         }
       }
 
-      toast.success(isEditing ? 'OS atualizada!' : 'OS criada!')
+      // GERAR LANÇAMENTOS AUTOMÁTICOS se status mudou para concluída
+      if (formData.status === 'concluida' && statusAnterior !== 'concluida') {
+        await gerarLancamentosFinanceiros(osId)
+        toast.success('OS concluída e lançamentos gerados!')
+      } else {
+        toast.success(isEditing ? 'OS atualizada!' : 'OS criada!')
+      }
+      
       navigate('/ordens-servico')
 
     } catch (error) {
@@ -671,7 +888,6 @@ const OrdemServicoForm = () => {
     { value: 'outros', label: 'Outros' }
   ]
 
-  // Tabs - Diário de Obra só aparece quando editando
   const tabs = [
     { id: 'dados', label: 'Dados Gerais', icon: Calendar },
     { id: 'servicos', label: 'Serviços', icon: Wrench },
@@ -795,7 +1011,6 @@ const OrdemServicoForm = () => {
                   <input type="date" name="data_agendamento" value={formData.data_agendamento} onChange={handleChange} className="input-field" />
                 </div>
 
-                {/* NOVO: Previsão de Dias */}
                 <div>
                   <label className="label">Previsão de Dias</label>
                   <input 
@@ -805,18 +1020,16 @@ const OrdemServicoForm = () => {
                     onChange={handleChange} 
                     className="input-field" 
                     min="1"
-                    placeholder="Quantos dias de obra?"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Quantos dias a obra deve durar</p>
                 </div>
 
                 <div>
                   <label className="label">Status</label>
-                  <select name="status" value={formData.status} onChange={handleChange} className="input-field">
+                  <select name="status" value={formData.status} onChange={handleStatusChange} className="input-field">
                     <option value="agendada">Agendada</option>
                     <option value="confirmada">Confirmada</option>
                     <option value="em_execucao">Em Execução</option>
-                    <option value="concluida">Concluída</option>
+                    <option value="concluida">✅ Concluída</option>
                     <option value="cancelada">Cancelada</option>
                   </select>
                 </div>
@@ -896,7 +1109,7 @@ const OrdemServicoForm = () => {
                           onChange={(e) => updateServico(index, 'servico_id', e.target.value)}
                           className="input-field"
                         >
-                          <option value="">Selecione ou digite descrição...</option>
+                          <option value="">Selecione...</option>
                           {servicosDisponiveis?.map(s => (
                             <option key={s.id} value={s.id}>{s.nome}</option>
                           ))}
@@ -929,7 +1142,7 @@ const OrdemServicoForm = () => {
                         value={servico.descricao}
                         onChange={(e) => updateServico(index, 'descricao', e.target.value)}
                         className="input-field flex-1 mr-3"
-                        placeholder="Descrição do serviço"
+                        placeholder="Descrição"
                       />
                       <span className="font-bold text-green-600 mr-3">
                         {formatCurrency(servico.valor_total)}
@@ -958,7 +1171,7 @@ const OrdemServicoForm = () => {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Equipe</h2>
               <button type="button" onClick={addColaborador} className="btn-secondary">
-                <Plus className="w-4 h-4" /> Adicionar Colaborador
+                <Plus className="w-4 h-4" /> Adicionar
               </button>
             </div>
 
@@ -983,7 +1196,7 @@ const OrdemServicoForm = () => {
                         </select>
                       </div>
                       <div>
-                        <label className="label text-xs">Valor Diária</label>
+                        <label className="label text-xs">Diária</label>
                         <input
                           type="number"
                           value={colab.valor_diaria}
@@ -1030,12 +1243,12 @@ const OrdemServicoForm = () => {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Custos Extras</h2>
               <button type="button" onClick={addCustoExtra} className="btn-secondary">
-                <Plus className="w-4 h-4" /> Adicionar Custo
+                <Plus className="w-4 h-4" /> Adicionar
               </button>
             </div>
 
             {custosExtras.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">Nenhum custo extra adicionado</p>
+              <p className="text-gray-500 text-center py-8">Nenhum custo extra</p>
             ) : (
               <div className="space-y-3">
                 {custosExtras.map((custo, index) => (
@@ -1097,7 +1310,7 @@ const OrdemServicoForm = () => {
               <div>
                 <label className="label">Veículo</label>
                 <select name="veiculo_id" value={formData.veiculo_id} onChange={handleChange} className="input-field">
-                  <option value="">Selecione um veículo...</option>
+                  <option value="">Selecione...</option>
                   {veiculos?.map(v => (
                     <option key={v.id} value={v.id}>{v.modelo} - {v.placa}</option>
                   ))}
@@ -1111,191 +1324,113 @@ const OrdemServicoForm = () => {
 
             {formData.veiculo_id && (
               <div className="mt-4 p-4 bg-blue-50 rounded-xl">
-                <p className="text-sm text-blue-800">
-                  {(() => {
-                    const v = veiculos?.find(v => v.id === formData.veiculo_id)
-                    if (!v) return null
-                    const custoTotal = (parseFloat(v.valor_aluguel_dia) || 0) + (parseFloat(v.valor_gasolina_dia) || 0)
-                    return (
-                      <>
-                        <strong>Custo diário do veículo:</strong> {formatCurrency(custoTotal)}
-                        <span className="text-xs block mt-1">
-                          Aluguel: {formatCurrency(v.valor_aluguel_dia)} | Gasolina: {formatCurrency(v.valor_gasolina_dia)}
-                        </span>
-                      </>
-                    )
-                  })()}
-                </p>
+                {(() => {
+                  const v = veiculos?.find(v => v.id === formData.veiculo_id)
+                  if (!v) return null
+                  const dias = parseInt(formData.previsao_dias) || 1
+                  const custoTotal = ((parseFloat(v.valor_aluguel_dia) || 0) + (parseFloat(v.valor_gasolina_dia) || 0)) * dias
+                  return (
+                    <p className="text-sm text-blue-800">
+                      <strong>Custo total ({dias} dias):</strong> {formatCurrency(custoTotal)}
+                      <span className="text-xs block mt-1">
+                        Aluguel/dia: {formatCurrency(v.valor_aluguel_dia)} | Gasolina/dia: {formatCurrency(v.valor_gasolina_dia)}
+                      </span>
+                    </p>
+                  )
+                })()}
               </div>
             )}
           </div>
         )}
 
-        {/* NOVA Tab: Checklists */}
+        {/* Tab: Checklists */}
         {activeTab === 'checklists' && (
           <div className="space-y-6">
             <div className="card">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Checklists da Obra</h2>
-              <p className="text-sm text-gray-600 mb-4">
-                Selecione os checklists que devem ser preenchidos durante a execução desta obra.
-              </p>
 
-              {/* Checklist de Início do Dia */}
+              {/* Início do Dia */}
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-2">
                   <label className="label mb-0 flex items-center gap-2">
                     <span className="w-3 h-3 bg-green-500 rounded-full"></span>
-                    Checklist de Início do Dia
+                    Início do Dia
                   </label>
-                  <button 
-                    type="button" 
-                    onClick={() => addChecklist('diario_inicio')}
-                    className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
-                  >
+                  <button type="button" onClick={() => addChecklist('diario_inicio')} className="text-blue-600 text-sm font-medium flex items-center gap-1">
                     <Plus className="w-4 h-4" /> Adicionar
                   </button>
                 </div>
                 <div className="space-y-2">
-                  {checklistsSelecionados
-                    .map((c, idx) => ({ ...c, originalIndex: idx }))
-                    .filter(c => c.tipo === 'diario_inicio')
-                    .map((c) => (
-                      <div key={c.originalIndex} className="flex items-center gap-2">
-                        <select
-                          value={c.checklist_modelo_id}
-                          onChange={(e) => updateChecklist(c.originalIndex, e.target.value)}
-                          className="input-field flex-1"
-                        >
-                          <option value="">Selecione um checklist...</option>
-                          {checklistModelos?.map(m => (
-                            <option key={m.id} value={m.id}>{m.nome}</option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => removeChecklist(c.originalIndex)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  {checklistsSelecionados.filter(c => c.tipo === 'diario_inicio').length === 0 && (
-                    <p className="text-sm text-gray-400 italic">Nenhum checklist de início selecionado</p>
-                  )}
+                  {checklistsSelecionados.map((c, idx) => ({ ...c, originalIndex: idx })).filter(c => c.tipo === 'diario_inicio').map((c) => (
+                    <div key={c.originalIndex} className="flex items-center gap-2">
+                      <select value={c.checklist_modelo_id} onChange={(e) => updateChecklist(c.originalIndex, e.target.value)} className="input-field flex-1">
+                        <option value="">Selecione...</option>
+                        {checklistModelos?.map(m => (<option key={m.id} value={m.id}>{m.nome}</option>))}
+                      </select>
+                      <button type="button" onClick={() => removeChecklist(c.originalIndex)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              {/* Checklist de Fim do Dia */}
+              {/* Fim do Dia */}
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-2">
                   <label className="label mb-0 flex items-center gap-2">
                     <span className="w-3 h-3 bg-red-500 rounded-full"></span>
-                    Checklist de Fim do Dia
+                    Fim do Dia
                   </label>
-                  <button 
-                    type="button" 
-                    onClick={() => addChecklist('diario_fim')}
-                    className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
-                  >
+                  <button type="button" onClick={() => addChecklist('diario_fim')} className="text-blue-600 text-sm font-medium flex items-center gap-1">
                     <Plus className="w-4 h-4" /> Adicionar
                   </button>
                 </div>
                 <div className="space-y-2">
-                  {checklistsSelecionados
-                    .map((c, idx) => ({ ...c, originalIndex: idx }))
-                    .filter(c => c.tipo === 'diario_fim')
-                    .map((c) => (
-                      <div key={c.originalIndex} className="flex items-center gap-2">
-                        <select
-                          value={c.checklist_modelo_id}
-                          onChange={(e) => updateChecklist(c.originalIndex, e.target.value)}
-                          className="input-field flex-1"
-                        >
-                          <option value="">Selecione um checklist...</option>
-                          {checklistModelos?.map(m => (
-                            <option key={m.id} value={m.id}>{m.nome}</option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => removeChecklist(c.originalIndex)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  {checklistsSelecionados.filter(c => c.tipo === 'diario_fim').length === 0 && (
-                    <p className="text-sm text-gray-400 italic">Nenhum checklist de fim selecionado</p>
-                  )}
+                  {checklistsSelecionados.map((c, idx) => ({ ...c, originalIndex: idx })).filter(c => c.tipo === 'diario_fim').map((c) => (
+                    <div key={c.originalIndex} className="flex items-center gap-2">
+                      <select value={c.checklist_modelo_id} onChange={(e) => updateChecklist(c.originalIndex, e.target.value)} className="input-field flex-1">
+                        <option value="">Selecione...</option>
+                        {checklistModelos?.map(m => (<option key={m.id} value={m.id}>{m.nome}</option>))}
+                      </select>
+                      <button type="button" onClick={() => removeChecklist(c.originalIndex)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              {/* Checklists Avulsos */}
+              {/* Avulsos */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="label mb-0 flex items-center gap-2">
                     <span className="w-3 h-3 bg-purple-500 rounded-full"></span>
-                    Checklists Avulsos (pontuais)
+                    Avulsos
                   </label>
-                  <button 
-                    type="button" 
-                    onClick={() => addChecklist('avulso')}
-                    className="text-blue-600 hover:text-blue-700 text-sm font-medium flex items-center gap-1"
-                  >
+                  <button type="button" onClick={() => addChecklist('avulso')} className="text-blue-600 text-sm font-medium flex items-center gap-1">
                     <Plus className="w-4 h-4" /> Adicionar
                   </button>
                 </div>
                 <div className="space-y-2">
-                  {checklistsSelecionados
-                    .map((c, idx) => ({ ...c, originalIndex: idx }))
-                    .filter(c => c.tipo === 'avulso')
-                    .map((c) => (
-                      <div key={c.originalIndex} className="flex items-center gap-2">
-                        <select
-                          value={c.checklist_modelo_id}
-                          onChange={(e) => updateChecklist(c.originalIndex, e.target.value)}
-                          className="input-field flex-1"
-                        >
-                          <option value="">Selecione um checklist...</option>
-                          {checklistModelos?.map(m => (
-                            <option key={m.id} value={m.id}>{m.nome}</option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => removeChecklist(c.originalIndex)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  {checklistsSelecionados.filter(c => c.tipo === 'avulso').length === 0 && (
-                    <p className="text-sm text-gray-400 italic">Nenhum checklist avulso selecionado</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="card bg-blue-50 border-blue-200">
-              <div className="flex items-start gap-3">
-                <ClipboardCheck className="w-6 h-6 text-blue-600 mt-0.5" />
-                <div>
-                  <h3 className="font-medium text-blue-900">Como funcionam os checklists?</h3>
-                  <ul className="text-sm text-blue-800 mt-2 space-y-1">
-                    <li>• <strong>Início do dia:</strong> Preenchido pela equipe ao chegar na obra</li>
-                    <li>• <strong>Fim do dia:</strong> Preenchido ao encerrar o trabalho diário</li>
-                    <li>• <strong>Avulsos:</strong> Preenchidos conforme necessidade (vistoria, entrega, etc.)</li>
-                  </ul>
+                  {checklistsSelecionados.map((c, idx) => ({ ...c, originalIndex: idx })).filter(c => c.tipo === 'avulso').map((c) => (
+                    <div key={c.originalIndex} className="flex items-center gap-2">
+                      <select value={c.checklist_modelo_id} onChange={(e) => updateChecklist(c.originalIndex, e.target.value)} className="input-field flex-1">
+                        <option value="">Selecione...</option>
+                        {checklistModelos?.map(m => (<option key={m.id} value={m.id}>{m.nome}</option>))}
+                      </select>
+                      <button type="button" onClick={() => removeChecklist(c.originalIndex)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* NOVA Tab: Diário de Obra (só aparece quando editando) */}
+        {/* Tab: Diário de Obra */}
         {activeTab === 'diario' && isEditing && (
           <DiarioObra 
             ordemServicoId={id}
@@ -1305,22 +1440,22 @@ const OrdemServicoForm = () => {
           />
         )}
 
-        {/* Resumo e Botões - Não mostra na aba Diário */}
+        {/* Resumo e Botões */}
         {activeTab !== 'diario' && (
           <div className="card bg-gray-50">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="flex gap-6">
                 <div>
                   <p className="text-xs text-gray-500">Serviços</p>
-                  <p className="font-bold text-gray-900">{formatCurrency(totalServicos)}</p>
+                  <p className="font-bold text-green-600">{formatCurrency(totalServicos)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">Mão de Obra</p>
-                  <p className="font-bold text-gray-900">{formatCurrency(totalMaoObra)}</p>
+                  <p className="font-bold text-blue-600">{formatCurrency(totalMaoObra)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">Custos Extras</p>
-                  <p className="font-bold text-gray-900">{formatCurrency(totalCustosExtras)}</p>
+                  <p className="font-bold text-red-600">{formatCurrency(totalCustosExtras)}</p>
                 </div>
               </div>
               <div className="flex gap-3">
@@ -1336,6 +1471,114 @@ const OrdemServicoForm = () => {
           </div>
         )}
       </form>
+
+      {/* MODAL DE CONFIRMAÇÃO DE LANÇAMENTOS */}
+      {showLancamentosModal && lancamentosPreview && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden shadow-xl animate-fade-in">
+            <div className="flex items-center justify-between p-6 border-b bg-green-50">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                  <CheckCircle className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Concluir OS</h2>
+                  <p className="text-sm text-gray-600">Os seguintes lançamentos serão gerados:</p>
+                </div>
+              </div>
+              <button onClick={cancelarConclusao} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[60vh] space-y-6">
+              {/* Receitas */}
+              {lancamentosPreview.receitas.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <TrendingUp className="w-5 h-5 text-green-600" />
+                    <h3 className="font-semibold text-green-800">Receitas (Contas a Receber)</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {lancamentosPreview.receitas.map((r, idx) => (
+                      <div key={idx} className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                        <div>
+                          <p className="font-medium text-gray-900">{r.descricao}</p>
+                          <p className="text-xs text-gray-500">{r.categoria}</p>
+                        </div>
+                        <span className="font-bold text-green-600">{formatCurrency(r.valor)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Despesas */}
+              {lancamentosPreview.despesas.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <TrendingDown className="w-5 h-5 text-red-600" />
+                    <h3 className="font-semibold text-red-800">Despesas (Contas a Pagar)</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {lancamentosPreview.despesas.map((d, idx) => (
+                      <div key={idx} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                        <div>
+                          <p className="font-medium text-gray-900">{d.descricao}</p>
+                          <p className="text-xs text-gray-500">{d.categoria}</p>
+                          {d.detalhe?.pix && (
+                            <p className="text-xs text-blue-600 mt-1">PIX: {d.detalhe.pix}</p>
+                          )}
+                        </div>
+                        <span className="font-bold text-red-600">{formatCurrency(d.valor)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Resumo */}
+              <div className="border-t pt-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="text-center p-3 bg-green-50 rounded-lg">
+                    <p className="text-xs text-gray-500">Total Receitas</p>
+                    <p className="text-xl font-bold text-green-600">{formatCurrency(lancamentosPreview.totalReceitas)}</p>
+                  </div>
+                  <div className="text-center p-3 bg-red-50 rounded-lg">
+                    <p className="text-xs text-gray-500">Total Despesas</p>
+                    <p className="text-xl font-bold text-red-600">{formatCurrency(lancamentosPreview.totalDespesas)}</p>
+                  </div>
+                  <div className={`text-center p-3 rounded-lg ${lancamentosPreview.lucro >= 0 ? 'bg-blue-50' : 'bg-orange-50'}`}>
+                    <p className="text-xs text-gray-500">Lucro</p>
+                    <p className={`text-xl font-bold ${lancamentosPreview.lucro >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
+                      {formatCurrency(lancamentosPreview.lucro)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Aviso */}
+              <div className="flex items-start gap-3 p-4 bg-yellow-50 rounded-xl">
+                <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                <div className="text-sm text-yellow-800">
+                  <p className="font-medium">Atenção:</p>
+                  <p>Os lançamentos serão criados com status "Pendente". Você poderá baixá-los individualmente no módulo Financeiro.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 p-6 border-t bg-gray-50">
+              <button onClick={cancelarConclusao} className="btn-secondary flex-1">
+                Cancelar
+              </button>
+              <button onClick={confirmarConclusao} className="btn-primary flex-1 bg-green-600 hover:bg-green-700">
+                <CheckCircle className="w-5 h-5" />
+                Confirmar e Gerar Lançamentos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
