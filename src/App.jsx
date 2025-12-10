@@ -41,6 +41,7 @@ import Financeiro from './pages/financeiro/Financeiro'
 import LancamentoForm from './pages/financeiro/LancamentoForm'
 import ContaBancariaForm from './pages/financeiro/ContaBancariaForm'
 import ImportarOFX from './pages/financeiro/ImportarOFX'
+import PlanoContas from './pages/financeiro/PlanoContas'
 
 // Usuários
 import Usuarios from './pages/usuarios/Usuarios'
@@ -182,6 +183,11 @@ function App() {
             <Route path="/financeiro/importar-ofx" element={
               <PrivateRoute>
                 <ImportarOFX />
+              </PrivateRoute>
+            } />
+            <Route path="/plano-contas" element={
+              <PrivateRoute>
+                <PlanoContas />
               </PrivateRoute>
             } />
 
