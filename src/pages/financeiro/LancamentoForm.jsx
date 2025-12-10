@@ -336,11 +336,40 @@ const LancamentoForm = () => {
     }
   })
 
-  // Filtrar plano de contas por tipo
+  // Filtrar plano de contas por tipo (só contas analíticas - que recebem lançamento)
   const planoContasFiltrado = useMemo(() => {
     if (!planoContas) return []
     return planoContas.filter(pc => pc.tipo === formData.tipo)
   }, [planoContas, formData.tipo])
+
+  // Buscar todos os planos (incluindo grupos) para mostrar o pai
+  const { data: todosPlanoContas } = useQuery({
+    queryKey: ['plano-contas-todos'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('plano_contas')
+        .select('*')
+        .eq('ativo', true)
+        .order('codigo')
+      if (error) throw error
+      return data
+    }
+  })
+
+  // Encontrar o grupo pai baseado no código
+  const grupoContaPai = useMemo(() => {
+    if (!formData.plano_conta_id || !todosPlanoContas) return null
+    
+    const contaSelecionada = todosPlanoContas.find(pc => pc.id === formData.plano_conta_id)
+    if (!contaSelecionada) return null
+    
+    // Extrair código do pai (ex: 4.1.1 → 4.1, 5.2.3 → 5.2)
+    const partesCodigo = contaSelecionada.codigo.split('.')
+    if (partesCodigo.length <= 2) return null // Já é um grupo de nível 2
+    
+    const codigoPai = partesCodigo.slice(0, 2).join('.')
+    return todosPlanoContas.find(pc => pc.codigo === codigoPai)
+  }, [formData.plano_conta_id, todosPlanoContas])
 
   // Preencher form com dados existentes
   useEffect(() => {
@@ -707,7 +736,7 @@ const LancamentoForm = () => {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Dados do Lançamento</h3>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Plano de Contas */}
+            {/* Plano de Contas (Subconta) */}
             <div>
               <label className="label">Plano de Contas *</label>
               <SearchableSelect
@@ -727,8 +756,23 @@ const LancamentoForm = () => {
               />
             </div>
 
-            {/* Descrição */}
+            {/* Grupo/Categoria (preenchido automaticamente) */}
             <div>
+              <label className="label">Categoria (Grupo)</label>
+              <div className={`input-field flex items-center gap-2 ${grupoContaPai ? 'bg-gray-50' : 'bg-gray-100'}`}>
+                {grupoContaPai ? (
+                  <>
+                    <span className="font-mono text-xs text-gray-400">{grupoContaPai.codigo}</span>
+                    <span className="text-gray-700">{grupoContaPai.nome}</span>
+                  </>
+                ) : (
+                  <span className="text-gray-400 text-sm">Selecione um plano de contas</span>
+                )}
+              </div>
+            </div>
+
+            {/* Descrição */}
+            <div className="md:col-span-2">
               <label className="label">Descrição *</label>
               <input
                 type="text"

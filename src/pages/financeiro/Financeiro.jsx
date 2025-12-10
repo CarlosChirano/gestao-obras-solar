@@ -519,7 +519,7 @@ const Financeiro = () => {
                 <div>
                   <p className="text-sm text-gray-500">Saldo em Contas</p>
                   <p className={`text-2xl font-bold ${saldoTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatCurrencyShort(saldoTotal)}
+                    {formatCurrency(saldoTotal)}
                   </p>
                 </div>
                 <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
@@ -532,7 +532,7 @@ const Financeiro = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-500">Receitas do Mês</p>
-                  <p className="text-2xl font-bold text-green-600">{formatCurrencyShort(receitasMes)}</p>
+                  <p className="text-2xl font-bold text-green-600">{formatCurrency(receitasMes)}</p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                   <ArrowUpCircle className="w-6 h-6 text-green-600" />
@@ -544,7 +544,7 @@ const Financeiro = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-500">Despesas do Mês</p>
-                  <p className="text-2xl font-bold text-red-600">{formatCurrencyShort(despesasMes)}</p>
+                  <p className="text-2xl font-bold text-red-600">{formatCurrency(despesasMes)}</p>
                 </div>
                 <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
                   <ArrowDownCircle className="w-6 h-6 text-red-600" />
@@ -557,7 +557,7 @@ const Financeiro = () => {
                 <div>
                   <p className="text-sm text-gray-500">Saldo do Mês</p>
                   <p className={`text-2xl font-bold ${saldoMes >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatCurrencyShort(saldoMes)}
+                    {formatCurrency(saldoMes)}
                   </p>
                 </div>
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${saldoMes >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>

@@ -226,24 +226,31 @@ const Clientes = () => {
             {/* Lista de clientes do mês atual */}
             {estatisticas.mesAtual?.clientes?.length > 0 && (
               <div className="mt-4 pt-4 border-t">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">
-                  Clientes cadastrados em {estatisticas.mesAtual.nome}:
+                <h4 className="text-sm font-medium text-gray-700 mb-3">
+                  Clientes cadastrados em {estatisticas.mesAtual.nome}: ({estatisticas.mesAtual.clientes.length})
                 </h4>
-                <div className="flex flex-wrap gap-2">
-                  {estatisticas.mesAtual.clientes.slice(0, 10).map(cliente => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+                  {estatisticas.mesAtual.clientes.map(cliente => (
                     <Link
                       key={cliente.id}
                       to={`/clientes/${cliente.id}`}
-                      className="px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm hover:bg-blue-100 transition-colors"
+                      className="flex items-center gap-2 p-2 bg-gray-50 hover:bg-blue-50 rounded-lg transition-colors group"
                     >
-                      {cliente.nome}
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0 ${
+                        cliente.tipo_pessoa === 'juridica' ? 'bg-purple-500' : 'bg-green-500'
+                      }`}>
+                        {cliente.nome?.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-700">
+                          {cliente.nome}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {cliente.numero_contrato || (cliente.tipo_pessoa === 'juridica' ? 'PJ' : 'PF')}
+                        </p>
+                      </div>
                     </Link>
                   ))}
-                  {estatisticas.mesAtual.clientes.length > 10 && (
-                    <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm">
-                      +{estatisticas.mesAtual.clientes.length - 10} mais
-                    </span>
-                  )}
                 </div>
               </div>
             )}
