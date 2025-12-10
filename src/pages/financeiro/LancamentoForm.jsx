@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
@@ -19,7 +19,12 @@ import {
   Trash2,
   Plus,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Search,
+  X,
+  ChevronDown,
+  TrendingUp,
+  TrendingDown
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -30,29 +35,21 @@ import toast from 'react-hot-toast'
 const maskMoney = (value) => {
   if (!value) return ''
   
-  // Remove tudo que não é número
   let numbers = value.toString().replace(/\D/g, '')
   
-  // Se vazio ou só zeros, retorna vazio
   if (!numbers || numbers === '0') return ''
   
-  // Remove zeros à esquerda
   numbers = numbers.replace(/^0+/, '')
   
-  // Se ficou vazio após remover zeros, retorna vazio
   if (!numbers) return ''
   
-  // Garante pelo menos 3 dígitos (para os centavos)
   numbers = numbers.padStart(3, '0')
   
-  // Separa reais e centavos
   const cents = numbers.slice(-2)
   let reais = numbers.slice(0, -2)
   
-  // Remove zeros à esquerda dos reais
   reais = reais.replace(/^0+/, '') || '0'
   
-  // Adiciona pontos a cada 3 dígitos nos reais
   reais = reais.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
   
   return `R$ ${reais},${cents}`
@@ -61,7 +58,6 @@ const maskMoney = (value) => {
 const parseMoney = (value) => {
   if (!value) return null
   
-  // Remove R$, espaços e pontos, substitui vírgula por ponto
   const numbers = value
     .replace('R$', '')
     .replace(/\s/g, '')
@@ -72,12 +68,136 @@ const parseMoney = (value) => {
   return isNaN(parsed) ? null : parsed
 }
 
-// Formata número do banco para exibição
 const formatMoneyFromDB = (value) => {
   if (!value && value !== 0) return ''
   const cents = Math.round(value * 100).toString()
   return maskMoney(cents)
 }
+
+// ============================================
+// COMPONENTE DE SELECT COM BUSCA
+// ============================================
+
+const SearchableSelect = ({ 
+  options, 
+  value, 
+  onChange, 
+  placeholder = "Selecione...",
+  searchPlaceholder = "Buscar...",
+  labelKey = "nome",
+  valueKey = "id",
+  renderOption = null
+}) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const [search, setSearch] = useState('')
+
+  const selectedOption = options?.find(opt => opt[valueKey] === value)
+
+  const filteredOptions = useMemo(() => {
+    if (!options) return []
+    if (!search) return options
+    
+    const searchLower = search.toLowerCase()
+    return options.filter(opt => 
+      opt[labelKey]?.toLowerCase().includes(searchLower)
+    )
+  }, [options, search, labelKey])
+
+  const handleSelect = (option) => {
+    onChange(option[valueKey])
+    setIsOpen(false)
+    setSearch('')
+  }
+
+  return (
+    <div className="relative">
+      {/* Campo de exibição */}
+      <div
+        onClick={() => setIsOpen(true)}
+        className={`input-field cursor-pointer flex items-center justify-between ${isOpen ? 'ring-2 ring-blue-500 border-blue-500' : ''}`}
+      >
+        <span className={selectedOption ? 'text-gray-900 truncate' : 'text-gray-400'}>
+          {selectedOption ? (renderOption ? renderOption(selectedOption) : selectedOption[labelKey]) : placeholder}
+        </span>
+        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
+      </div>
+
+      {/* Dropdown */}
+      {isOpen && (
+        <>
+          <div 
+            className="fixed inset-0 z-40"
+            onClick={() => {
+              setIsOpen(false)
+              setSearch('')
+            }}
+          />
+          <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-72 overflow-hidden">
+            {/* Campo de busca */}
+            <div className="p-2 border-b">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={searchPlaceholder}
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  autoFocus
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded"
+                  >
+                    <X className="w-3 h-3 text-gray-400" />
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            {/* Lista de opções */}
+            <div className="overflow-y-auto max-h-52">
+              {/* Opção vazia */}
+              <div
+                onClick={() => {
+                  onChange('')
+                  setIsOpen(false)
+                  setSearch('')
+                }}
+                className="px-3 py-2 hover:bg-gray-50 cursor-pointer text-gray-400 text-sm"
+              >
+                {placeholder}
+              </div>
+
+              {filteredOptions.length === 0 ? (
+                <div className="p-4 text-center text-gray-500 text-sm">
+                  Nenhum resultado encontrado
+                </div>
+              ) : (
+                filteredOptions.map((option) => (
+                  <div
+                    key={option[valueKey]}
+                    onClick={() => handleSelect(option)}
+                    className={`px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm ${
+                      option[valueKey] === value ? 'bg-blue-50 text-blue-700' : ''
+                    }`}
+                  >
+                    {renderOption ? renderOption(option) : option[labelKey]}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ============================================
+// COMPONENTE PRINCIPAL
+// ============================================
 
 const LancamentoForm = () => {
   const { id } = useParams()
@@ -94,7 +214,7 @@ const LancamentoForm = () => {
     data_competencia: '',
     status: 'pendente',
     conta_bancaria_id: '',
-    categoria_id: '',
+    plano_conta_id: '',
     forma_pagamento_id: '',
     cliente_id: '',
     colaborador_id: '',
@@ -145,15 +265,16 @@ const LancamentoForm = () => {
     enabled: isEdicao
   })
 
-  // Buscar categorias
-  const { data: categorias } = useQuery({
-    queryKey: ['categorias-financeiras'],
+  // Buscar Plano de Contas (ao invés de categorias)
+  const { data: planoContas } = useQuery({
+    queryKey: ['plano-contas'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('categorias_financeiras')
+        .from('plano_contas')
         .select('*')
         .eq('ativo', true)
-        .order('nome')
+        .eq('permite_lancamento', true)
+        .order('codigo')
       if (error) throw error
       return data
     }
@@ -193,7 +314,7 @@ const LancamentoForm = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('clientes')
-        .select('id, nome')
+        .select('id, nome, numero_contrato')
         .eq('ativo', true)
         .order('nome')
       if (error) throw error
@@ -215,6 +336,12 @@ const LancamentoForm = () => {
     }
   })
 
+  // Filtrar plano de contas por tipo
+  const planoContasFiltrado = useMemo(() => {
+    if (!planoContas) return []
+    return planoContas.filter(pc => pc.tipo === formData.tipo)
+  }, [planoContas, formData.tipo])
+
   // Preencher form com dados existentes
   useEffect(() => {
     if (lancamento) {
@@ -227,7 +354,7 @@ const LancamentoForm = () => {
         data_competencia: lancamento.data_competencia || '',
         status: lancamento.status || 'pendente',
         conta_bancaria_id: lancamento.conta_bancaria_id || '',
-        categoria_id: lancamento.categoria_id || '',
+        plano_conta_id: lancamento.plano_conta_id || lancamento.categoria_id || '',
         forma_pagamento_id: lancamento.forma_pagamento_id || '',
         cliente_id: lancamento.cliente_id || '',
         colaborador_id: lancamento.colaborador_id || '',
@@ -254,6 +381,17 @@ const LancamentoForm = () => {
     }
   }, [vinculosExistentes])
 
+  // Ao selecionar conta do plano, preencher descrição
+  const handlePlanoContaChange = (planoContaId) => {
+    const contaSelecionada = planoContas?.find(pc => pc.id === planoContaId)
+    
+    setFormData(prev => ({
+      ...prev,
+      plano_conta_id: planoContaId,
+      descricao: prev.descricao || contaSelecionada?.nome || ''
+    }))
+  }
+
   // Calcular soma dos vínculos
   const calcularSomaVinculos = () => {
     return clientesVinculados.reduce((soma, cliente) => {
@@ -273,7 +411,6 @@ const LancamentoForm = () => {
       return
     }
 
-    // Verificar se já existe
     if (clientesVinculados.some(c => c.cliente_id === novoClienteId)) {
       toast.error('Este cliente já está vinculado')
       return
@@ -308,18 +445,23 @@ const LancamentoForm = () => {
   const salvarMutation = useMutation({
     mutationFn: async (dados) => {
       const payload = {
-        ...dados,
+        tipo: dados.tipo,
+        descricao: dados.descricao,
         valor: parseMoney(dados.valor) || 0,
+        data_vencimento: dados.data_vencimento,
+        data_pagamento: dados.data_pagamento || null,
+        data_competencia: dados.data_competencia || null,
+        status: dados.status,
         conta_bancaria_id: dados.conta_bancaria_id || null,
-        categoria_id: dados.categoria_id || null,
+        plano_conta_id: dados.plano_conta_id || null,
         forma_pagamento_id: dados.forma_pagamento_id || null,
         cliente_id: dados.cliente_id || null,
         colaborador_id: dados.colaborador_id || null,
         ordem_servico_id: dados.ordem_servico_id || null,
-        data_pagamento: dados.data_pagamento || null,
-        data_competencia: dados.data_competencia || null,
+        recorrente: dados.recorrente,
         total_parcelas: dados.total_parcelas ? parseInt(dados.total_parcelas) : null,
-        frequencia: dados.recorrente ? dados.frequencia : null
+        frequencia: dados.recorrente ? dados.frequencia : null,
+        observacoes: dados.observacoes
       }
 
       let lancamentoId = id
@@ -342,13 +484,11 @@ const LancamentoForm = () => {
 
       // Salvar vínculos de clientes
       if (lancamentoId) {
-        // Primeiro, remover vínculos antigos
         await supabase
           .from('lancamento_clientes')
           .delete()
           .eq('lancamento_id', lancamentoId)
 
-        // Depois, inserir os novos
         if (clientesVinculados.length > 0) {
           const vinculos = clientesVinculados.map(c => ({
             lancamento_id: lancamentoId,
@@ -426,7 +566,7 @@ const LancamentoForm = () => {
       toast.error('Informe a descrição')
       return
     }
-    if (!formData.valor || parseFloat(formData.valor) <= 0) {
+    if (!formData.valor || parseMoney(formData.valor) <= 0) {
       toast.error('Informe um valor válido')
       return
     }
@@ -451,18 +591,26 @@ const LancamentoForm = () => {
     setFormData(prev => ({ ...prev, valor: masked }))
   }
 
-  const categoriasFiltradas = categorias?.filter(c => c.tipo === formData.tipo) || []
-
   // Calcular comparação
   const valorLancamento = parseMoney(formData.valor) || 0
   const somaVinculos = calcularSomaVinculos()
   const diferencaValores = Math.abs(valorLancamento - somaVinculos)
-  const valoresConferem = diferencaValores < 0.01 // Tolerância de 1 centavo
+  const valoresConferem = diferencaValores < 0.01
 
-  // Clientes disponíveis (que ainda não foram vinculados)
+  // Clientes disponíveis
   const clientesDisponiveis = clientes?.filter(c => 
     !clientesVinculados.some(cv => cv.cliente_id === c.id)
   ) || []
+
+  // Formatar clientes para exibição com número do contrato
+  const clientesDisponiveisFormatados = useMemo(() => {
+    return clientesDisponiveis.map(c => ({
+      ...c,
+      nomeExibicao: c.numero_contrato 
+        ? `${c.numero_contrato} - ${c.nome}`
+        : c.nome
+    }))
+  }, [clientesDisponiveis])
 
   if (loadingLancamento) {
     return (
@@ -488,7 +636,7 @@ const LancamentoForm = () => {
           <button
             onClick={() => marcarPagoMutation.mutate()}
             disabled={marcarPagoMutation.isPending}
-            className="btn btn-success flex items-center gap-2"
+            className="btn-success flex items-center gap-2"
           >
             <CheckCircle2 className="w-4 h-4" />
             Marcar como Pago
@@ -559,89 +707,83 @@ const LancamentoForm = () => {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Dados do Lançamento</h3>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Descrição *
-              </label>
+            {/* Plano de Contas */}
+            <div>
+              <label className="label">Plano de Contas *</label>
+              <SearchableSelect
+                options={planoContasFiltrado}
+                value={formData.plano_conta_id}
+                onChange={handlePlanoContaChange}
+                placeholder="Selecione uma conta..."
+                searchPlaceholder="Buscar conta..."
+                labelKey="nome"
+                valueKey="id"
+                renderOption={(opt) => (
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-xs text-gray-400">{opt.codigo}</span>
+                    <span>{opt.nome}</span>
+                  </div>
+                )}
+              />
+            </div>
+
+            {/* Descrição */}
+            <div>
+              <label className="label">Descrição *</label>
               <input
                 type="text"
                 name="descricao"
                 value={formData.descricao}
                 onChange={handleChange}
-                className="input"
+                className="input-field"
                 placeholder="Ex: Pagamento de energia elétrica"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Valor *
-              </label>
+              <label className="label">Valor *</label>
               <input
                 type="text"
                 name="valor"
                 value={formData.valor}
                 onChange={handleValorChange}
-                className="input"
+                className="input-field"
                 placeholder="R$ 0,00"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Categoria
-              </label>
-              <select
-                name="categoria_id"
-                value={formData.categoria_id}
-                onChange={handleChange}
-                className="input"
-              >
-                <option value="">Selecione...</option>
-                {categoriasFiltradas.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.nome}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Data de Vencimento *
-              </label>
+              <label className="label">Data de Vencimento *</label>
               <input
                 type="date"
                 name="data_vencimento"
                 value={formData.data_vencimento}
                 onChange={handleChange}
-                className="input"
+                className="input-field"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Data de Pagamento
-              </label>
+              <label className="label">Data de Pagamento</label>
               <input
                 type="date"
                 name="data_pagamento"
                 value={formData.data_pagamento}
                 onChange={handleChange}
-                className="input"
+                className="input-field"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Conta Bancária
-              </label>
+              <label className="label">Conta Bancária</label>
               <select
                 name="conta_bancaria_id"
                 value={formData.conta_bancaria_id}
                 onChange={handleChange}
-                className="input"
+                className="input-field"
               >
                 <option value="">Selecione...</option>
                 {contas?.map((conta) => (
@@ -651,14 +793,12 @@ const LancamentoForm = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Forma de Pagamento
-              </label>
+              <label className="label">Forma de Pagamento</label>
               <select
                 name="forma_pagamento_id"
                 value={formData.forma_pagamento_id}
                 onChange={handleChange}
-                className="input"
+                className="input-field"
               >
                 <option value="">Selecione...</option>
                 {formasPagamento?.map((fp) => (
@@ -668,14 +808,12 @@ const LancamentoForm = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Status
-              </label>
+              <label className="label">Status</label>
               <select
                 name="status"
                 value={formData.status}
                 onChange={handleChange}
-                className="input"
+                className="input-field"
               >
                 <option value="pendente">Pendente</option>
                 <option value="pago">Pago</option>
@@ -687,100 +825,77 @@ const LancamentoForm = () => {
 
         {/* Vínculos com Clientes */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Vínculos com Clientes
-          </h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Vínculos com Clientes</h3>
           <p className="text-sm text-gray-500 mb-4">
             Vincule um ou mais clientes a este lançamento com seus respectivos valores.
           </p>
           
           {/* Adicionar novo cliente */}
-          <div style={{ 
-            backgroundColor: '#f9fafb', 
-            padding: '16px', 
-            borderRadius: '8px',
-            marginBottom: '16px'
-          }}>
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: '1fr 150px auto', 
-              gap: '12px',
-              alignItems: 'flex-end'
-            }}>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Cliente
-                </label>
-                <select
+          <div className="bg-gray-50 p-4 rounded-lg mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+              <div className="md:col-span-1">
+                <label className="label">Cliente</label>
+                <SearchableSelect
+                  options={clientesDisponiveisFormatados}
                   value={novoClienteId}
-                  onChange={(e) => setNovoClienteId(e.target.value)}
-                  className="input"
-                >
-                  <option value="">Selecione um cliente...</option>
-                  {clientesDisponiveis.map((cliente) => (
-                    <option key={cliente.id} value={cliente.id}>{cliente.nome}</option>
-                  ))}
-                </select>
+                  onChange={setNovoClienteId}
+                  placeholder="Selecione um cliente..."
+                  searchPlaceholder="Buscar por nome ou contrato..."
+                  labelKey="nomeExibicao"
+                  valueKey="id"
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Valor
-                </label>
+                <label className="label">Valor</label>
                 <input
                   type="text"
                   value={novoClienteValor}
                   onChange={(e) => setNovoClienteValor(maskMoney(e.target.value))}
-                  className="input"
+                  className="input-field"
                   placeholder="R$ 0,00"
                 />
               </div>
-              <button
-                type="button"
-                onClick={adicionarClienteVinculado}
-                className="btn btn-primary flex items-center gap-2"
-                style={{ height: '42px' }}
-              >
-                <Plus className="w-4 h-4" />
-                Adicionar
-              </button>
+              <div>
+                <button
+                  type="button"
+                  onClick={adicionarClienteVinculado}
+                  className="btn-primary w-full h-[42px]"
+                >
+                  <Plus className="w-4 h-4" />
+                  Adicionar
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Lista de clientes vinculados */}
           {clientesVinculados.length > 0 && (
-            <div style={{ marginTop: '16px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className="mt-4">
+              <table className="w-full">
                 <thead>
-                  <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                    <th style={{ textAlign: 'left', padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
-                      Cliente
-                    </th>
-                    <th style={{ textAlign: 'right', padding: '12px 8px', fontSize: '14px', fontWeight: '600', color: '#374151', width: '180px' }}>
-                      Valor
-                    </th>
-                    <th style={{ width: '60px', padding: '12px 8px' }}></th>
+                  <tr className="border-b-2 border-gray-200">
+                    <th className="text-left px-3 py-2 text-sm font-semibold text-gray-700">Cliente</th>
+                    <th className="text-right px-3 py-2 text-sm font-semibold text-gray-700 w-44">Valor</th>
+                    <th className="w-12 px-3 py-2"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {clientesVinculados.map((cliente, index) => (
-                    <tr key={index} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                      <td style={{ padding: '12px 8px', fontSize: '14px', color: '#1f2937' }}>
-                        {cliente.cliente_nome}
-                      </td>
-                      <td style={{ padding: '12px 8px', textAlign: 'right' }}>
+                    <tr key={index} className="border-b border-gray-100">
+                      <td className="px-3 py-2 text-sm text-gray-900">{cliente.cliente_nome}</td>
+                      <td className="px-3 py-2 text-right">
                         <input
                           type="text"
                           value={cliente.valor}
                           onChange={(e) => atualizarValorCliente(index, e.target.value)}
-                          className="input"
-                          style={{ textAlign: 'right', width: '150px' }}
+                          className="input-field text-right w-36"
                         />
                       </td>
-                      <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                      <td className="px-3 py-2 text-center">
                         <button
                           type="button"
                           onClick={() => removerClienteVinculado(index)}
-                          className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors"
+                          className="p-2 hover:bg-red-50 rounded-lg text-red-500"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -790,44 +905,32 @@ const LancamentoForm = () => {
                 </tbody>
               </table>
 
-              {/* Somatório e comparação */}
-              <div style={{ 
-                marginTop: '16px', 
-                padding: '16px', 
-                borderRadius: '8px',
-                backgroundColor: valoresConferem ? '#ecfdf5' : '#fef2f2',
-                border: `2px solid ${valoresConferem ? '#10b981' : '#ef4444'}`
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <span style={{ fontSize: '14px', color: '#6b7280' }}>Valor do Lançamento:</span>
-                  <span style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>
-                    {formData.valor || 'R$ 0,00'}
-                  </span>
+              {/* Somatório */}
+              <div className={`mt-4 p-4 rounded-lg border-2 ${
+                valoresConferem 
+                  ? 'bg-green-50 border-green-300' 
+                  : 'bg-red-50 border-red-300'
+              }`}>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-600">Valor do Lançamento:</span>
+                  <span className="font-semibold">{formData.valor || 'R$ 0,00'}</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <span style={{ fontSize: '14px', color: '#6b7280' }}>Total dos Vínculos:</span>
-                  <span style={{ fontSize: '16px', fontWeight: '600', color: '#1f2937' }}>
-                    {formatMoneyFromDB(somaVinculos)}
-                  </span>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm text-gray-600">Total dos Vínculos:</span>
+                  <span className="font-semibold">{formatMoneyFromDB(somaVinculos)}</span>
                 </div>
-                <div style={{ 
-                  borderTop: `1px solid ${valoresConferem ? '#10b981' : '#ef4444'}`,
-                  paddingTop: '12px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center'
-                }}>
+                <div className={`border-t pt-2 flex justify-between items-center ${
+                  valoresConferem ? 'border-green-300' : 'border-red-300'
+                }`}>
                   {valoresConferem ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#059669' }}>
+                    <div className="flex items-center gap-2 text-green-600">
                       <CheckCircle className="w-5 h-5" />
-                      <span style={{ fontWeight: '600' }}>Valores conferem!</span>
+                      <span className="font-semibold">Valores conferem!</span>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#dc2626' }}>
+                    <div className="flex items-center gap-2 text-red-600">
                       <AlertCircle className="w-5 h-5" />
-                      <span style={{ fontWeight: '600' }}>
-                        Diferença de {formatMoneyFromDB(diferencaValores)}
-                      </span>
+                      <span className="font-semibold">Diferença: {formatMoneyFromDB(diferencaValores)}</span>
                     </div>
                   )}
                 </div>
@@ -836,16 +939,10 @@ const LancamentoForm = () => {
           )}
 
           {clientesVinculados.length === 0 && (
-            <div style={{ 
-              textAlign: 'center', 
-              padding: '32px', 
-              color: '#9ca3af',
-              backgroundColor: '#f9fafb',
-              borderRadius: '8px'
-            }}>
-              <User className="w-10 h-10 mx-auto mb-2 opacity-50" />
-              <p>Nenhum cliente vinculado</p>
-              <p className="text-sm">Adicione clientes para rastrear valores individuais</p>
+            <div className="text-center py-8 bg-gray-50 rounded-lg">
+              <User className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+              <p className="text-gray-500">Nenhum cliente vinculado</p>
+              <p className="text-sm text-gray-400">Adicione clientes para rastrear valores individuais</p>
             </div>
           )}
         </div>
@@ -855,20 +952,16 @@ const LancamentoForm = () => {
           <div className="card">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Vínculo com Colaborador (Opcional)</h3>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Colaborador
-              </label>
-              <select
-                name="colaborador_id"
+              <label className="label">Colaborador</label>
+              <SearchableSelect
+                options={colaboradores || []}
                 value={formData.colaborador_id}
-                onChange={handleChange}
-                className="input"
-              >
-                <option value="">Selecione...</option>
-                {colaboradores?.map((col) => (
-                  <option key={col.id} value={col.id}>{col.nome}</option>
-                ))}
-              </select>
+                onChange={(val) => setFormData(prev => ({ ...prev, colaborador_id: val }))}
+                placeholder="Selecione..."
+                searchPlaceholder="Buscar colaborador..."
+                labelKey="nome"
+                valueKey="id"
+              />
             </div>
           </div>
         )}
@@ -880,7 +973,7 @@ const LancamentoForm = () => {
             name="observacoes"
             value={formData.observacoes}
             onChange={handleChange}
-            className="input"
+            className="input-field"
             rows={3}
             placeholder="Anotações adicionais..."
           />
@@ -905,14 +998,12 @@ const LancamentoForm = () => {
           {formData.recorrente && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Frequência
-                </label>
+                <label className="label">Frequência</label>
                 <select
                   name="frequencia"
                   value={formData.frequencia}
                   onChange={handleChange}
-                  className="input"
+                  className="input-field"
                 >
                   <option value="">Selecione...</option>
                   <option value="semanal">Semanal</option>
@@ -923,15 +1014,13 @@ const LancamentoForm = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Número de Parcelas
-                </label>
+                <label className="label">Número de Parcelas</label>
                 <input
                   type="number"
                   name="total_parcelas"
                   value={formData.total_parcelas}
                   onChange={handleChange}
-                  className="input"
+                  className="input-field"
                   placeholder="Ex: 12"
                   min="1"
                 />
@@ -950,7 +1039,7 @@ const LancamentoForm = () => {
                   excluirMutation.mutate()
                 }
               }}
-              className="btn btn-danger flex items-center gap-2"
+              className="btn-danger flex items-center gap-2"
             >
               <Trash2 className="w-4 h-4" />
               Excluir
@@ -961,14 +1050,14 @@ const LancamentoForm = () => {
             <button
               type="button"
               onClick={() => navigate('/financeiro')}
-              className="btn btn-secondary"
+              className="btn-secondary"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={salvarMutation.isPending}
-              className="btn btn-primary flex items-center gap-2"
+              className="btn-primary flex items-center gap-2"
             >
               {salvarMutation.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

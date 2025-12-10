@@ -87,6 +87,20 @@ const EquipeForm = () => {
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
+  // ============================================
+  // CORREÇÃO: Preencher função automaticamente
+  // ============================================
+  const handleColaboradorChange = (e) => {
+    const colaboradorId = e.target.value
+    const colaborador = colaboradores?.find(c => c.id === colaboradorId)
+    
+    setNovoMembro({
+      colaborador_id: colaboradorId,
+      // Preenche automaticamente com a função do colaborador
+      funcao_na_equipe: colaborador?.funcao?.nome || ''
+    })
+  }
+
   const handleAddMembro = () => {
     if (!novoMembro.colaborador_id) {
       toast.error('Selecione um colaborador')
@@ -297,7 +311,7 @@ const EquipeForm = () => {
               <label className="label">Colaborador</label>
               <select
                 value={novoMembro.colaborador_id}
-                onChange={(e) => setNovoMembro(prev => ({ ...prev, colaborador_id: e.target.value }))}
+                onChange={handleColaboradorChange}
                 className="input-field"
               >
                 <option value="">Selecione um colaborador...</option>
