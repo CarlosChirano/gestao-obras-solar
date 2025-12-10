@@ -159,7 +159,7 @@ const OrdemServicoForm = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('colaboradores')
-        .select('id, nome, pix, funcao:funcoes(id, nome, valor_diaria), valor_cafe_dia, valor_almoco_dia, valor_transporte_dia, valor_outros_dia')
+        .select('id, nome, pix, valor_diaria, funcao:funcoes(id, nome, valor_diaria), valor_cafe_dia, valor_almoco_dia, valor_transporte_dia, valor_outros_dia')
         .eq('ativo', true)
         .order('nome')
       return data
@@ -447,11 +447,13 @@ const OrdemServicoForm = () => {
       const col = colaboradoresDisponiveis?.find(c => c.id === value)
       if (col) {
         updated[index].funcao_id = col.funcao?.id || ''
-        updated[index].valor_diaria = col.funcao?.valor_diaria || 0
+        // Prioriza valor_diaria do colaborador, senão usa da função
+        const valorDiaria = parseFloat(col.valor_diaria) || parseFloat(col.funcao?.valor_diaria) || 0
+        updated[index].valor_diaria = valorDiaria
         updated[index].colaborador_nome = col.nome
         updated[index].colaborador_pix = col.pix
         updated[index].funcao_nome = col.funcao?.nome
-        updated[index].valor_total = (updated[index].dias_trabalhados || 1) * (col.funcao?.valor_diaria || 0)
+        updated[index].valor_total = (updated[index].dias_trabalhados || 1) * valorDiaria
         // Guardar valores de alimentação
         updated[index].valor_cafe = col.valor_cafe_dia || 0
         updated[index].valor_almoco = col.valor_almoco_dia || 0

@@ -24,7 +24,8 @@ import {
   X,
   ChevronDown,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  ClipboardList
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -333,6 +334,24 @@ const LancamentoForm = () => {
         .order('nome')
       if (error) throw error
       return data
+    }
+  })
+
+  // Buscar Ordens de Serviço para vincular
+  const { data: ordensServico } = useQuery({
+    queryKey: ['ordens-servico-select'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ordens_servico')
+        .select('id, numero_os, cliente:clientes(nome), data_agendamento, valor_total')
+        .eq('ativo', true)
+        .order('data_agendamento', { ascending: false })
+        .limit(100)
+      if (error) throw error
+      return data?.map(os => ({
+        ...os,
+        nomeExibicao: `${os.numero_os || 'OS'} - ${os.cliente?.nome || 'Sem cliente'}`
+      }))
     }
   })
 
@@ -867,12 +886,49 @@ const LancamentoForm = () => {
           </div>
         </div>
 
-        {/* Vínculos com Clientes */}
+        {/* Vínculos */}
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Vínculos com Clientes</h3>
-          <p className="text-sm text-gray-500 mb-4">
-            Vincule um ou mais clientes a este lançamento com seus respectivos valores.
-          </p>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Vínculos (Opcional)</h3>
+          
+          {/* Vínculo com OS */}
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <label className="label flex items-center gap-2">
+              <FileText className="w-4 h-4 text-blue-600" />
+              Vincular à Ordem de Serviço
+            </label>
+            <SearchableSelect
+              options={ordensServico || []}
+              value={formData.ordem_servico_id}
+              onChange={(val) => setFormData(prev => ({ ...prev, ordem_servico_id: val }))}
+              placeholder="Selecione uma OS..."
+              searchPlaceholder="Buscar por número ou cliente..."
+              labelKey="nomeExibicao"
+              valueKey="id"
+              renderOption={(opt) => (
+                <div className="flex justify-between items-center w-full">
+                  <div>
+                    <span className="font-medium">{opt.numero_os || 'OS'}</span>
+                    <span className="text-gray-500 ml-2 text-sm">{opt.cliente?.nome}</span>
+                  </div>
+                  {opt.valor_total > 0 && (
+                    <span className="text-xs text-green-600 font-medium">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(opt.valor_total)}
+                    </span>
+                  )}
+                </div>
+              )}
+            />
+            <p className="text-xs text-blue-600 mt-2">
+              💡 Vincule este lançamento a uma OS para ter o DRE por obra
+            </p>
+          </div>
+
+          {/* Vínculos com Clientes */}
+          <div className="border-t pt-4">
+            <h4 className="font-medium text-gray-700 mb-2">Vínculos com Clientes</h4>
+            <p className="text-sm text-gray-500 mb-4">
+              Vincule um ou mais clientes a este lançamento com seus respectivos valores.
+            </p>
           
           {/* Adicionar novo cliente */}
           <div className="bg-gray-50 p-4 rounded-lg mb-4">
@@ -989,6 +1045,7 @@ const LancamentoForm = () => {
               <p className="text-sm text-gray-400">Adicione clientes para rastrear valores individuais</p>
             </div>
           )}
+          </div>
         </div>
 
         {/* Colaborador (para despesas) */}
