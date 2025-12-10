@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Save, Loader2, AlertCircle, Check, Plus, Trash2, MapPin, Edit, Navigation, Star, X, Building2 } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, AlertCircle, Check, Plus, Trash2, MapPin, Edit, Navigation, Star, X, Building2, FileText } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 // ============================================
@@ -160,7 +160,9 @@ const ClienteForm = () => {
   const [formData, setFormData] = useState({
     nome: '',
     tipo_pessoa: 'fisica',
+    tipo_identificacao: 'documento', // 'documento' ou 'contrato'
     cpf_cnpj: '',
+    numero_contrato: '',
     rg_ie: '',
     telefone: '',
     email: '',
@@ -212,10 +214,15 @@ const ClienteForm = () => {
 
       if (error) throw error
 
+      // Determinar tipo de identificação baseado nos dados
+      const tipoIdent = data.numero_contrato && !data.cpf_cnpj ? 'contrato' : 'documento'
+
       setFormData({
         nome: data.nome || '',
         tipo_pessoa: data.tipo_pessoa || 'fisica',
+        tipo_identificacao: tipoIdent,
         cpf_cnpj: data.cpf_cnpj || '',
+        numero_contrato: data.numero_contrato || '',
         rg_ie: data.rg_ie || '',
         telefone: data.telefone || '',
         email: data.email || '',
@@ -309,6 +316,16 @@ const ClienteForm = () => {
       ...prev, 
       tipo_pessoa: novoTipo,
       cpf_cnpj: ''
+    }))
+    setErrors(prev => ({ ...prev, cpf_cnpj: false }))
+  }
+
+  const handleTipoIdentificacaoChange = (tipo) => {
+    setFormData(prev => ({
+      ...prev,
+      tipo_identificacao: tipo,
+      cpf_cnpj: tipo === 'documento' ? prev.cpf_cnpj : '',
+      numero_contrato: tipo === 'contrato' ? prev.numero_contrato : ''
     }))
     setErrors(prev => ({ ...prev, cpf_cnpj: false }))
   }
@@ -501,19 +518,22 @@ const ClienteForm = () => {
     }
   }
 
-  const setPrincipal = async (endereco) => {
+  const setEnderecoPrincipal = async (endereco) => {
     try {
-      if (isEditing && id && !endereco.isTemp) {
+      if (isEditing && id) {
+        // Remover principal de todos
         await supabase
           .from('cliente_enderecos')
           .update({ is_principal: false })
           .eq('cliente_id', id)
         
+        // Definir novo principal
         await supabase
           .from('cliente_enderecos')
           .update({ is_principal: true })
           .eq('id', endereco.id)
         
+        // Recarregar
         const { data } = await supabase
           .from('cliente_enderecos')
           .select('*')
@@ -522,100 +542,107 @@ const ClienteForm = () => {
           .order('is_principal', { ascending: false })
           .order('nome')
         setEnderecos(data || [])
+        toast.success('Endereço principal atualizado!')
       } else {
         setEnderecos(prev => prev.map(e => ({
           ...e,
           is_principal: e.id === endereco.id
         })))
       }
-      toast.success('Endereço principal definido!')
     } catch (error) {
-      toast.error('Erro: ' + error.message)
+      toast.error('Erro ao definir principal')
     }
-  }
-
-  // ============================================
-  // VALIDAÇÃO E SUBMIT
-  // ============================================
-
-  const validateForm = () => {
-    const newErrors = {}
-    
-    if (!formData.nome.trim()) {
-      toast.error('Nome é obrigatório')
-      return false
-    }
-    
-    if (formData.cpf_cnpj) {
-      const isValid = formData.tipo_pessoa === 'juridica' 
-        ? isValidCNPJ(formData.cpf_cnpj) 
-        : isValidCPF(formData.cpf_cnpj)
-      if (!isValid) {
-        newErrors.cpf_cnpj = true
-        toast.error(formData.tipo_pessoa === 'juridica' ? 'CNPJ inválido' : 'CPF inválido')
-        return false
-      }
-    }
-    
-    if (formData.email && !isValidEmail(formData.email)) {
-      newErrors.email = true
-      toast.error('E-mail inválido')
-      return false
-    }
-    
-    setErrors(newErrors)
-    return true
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
-    if (!validateForm()) return
-    
+
+    if (!formData.nome.trim()) {
+      toast.error('Nome é obrigatório')
+      return
+    }
+
+    // Validação de CPF/CNPJ apenas se tipo_identificacao for documento
+    if (formData.tipo_identificacao === 'documento' && formData.cpf_cnpj) {
+      const isValid = formData.tipo_pessoa === 'juridica' 
+        ? isValidCNPJ(formData.cpf_cnpj)
+        : isValidCPF(formData.cpf_cnpj)
+      
+      if (!isValid) {
+        toast.error(`${formData.tipo_pessoa === 'juridica' ? 'CNPJ' : 'CPF'} inválido`)
+        return
+      }
+    }
+
+    if (formData.email && !isValidEmail(formData.email)) {
+      toast.error('E-mail inválido')
+      return
+    }
+
     setLoading(true)
 
     try {
+      const clienteData = {
+        nome: formData.nome,
+        tipo_pessoa: formData.tipo_pessoa,
+        cpf_cnpj: formData.tipo_identificacao === 'documento' ? formData.cpf_cnpj : null,
+        numero_contrato: formData.tipo_identificacao === 'contrato' ? formData.numero_contrato : null,
+        rg_ie: formData.rg_ie,
+        telefone: formData.telefone,
+        email: formData.email,
+        endereco: formData.endereco,
+        cidade: formData.cidade,
+        estado: formData.estado,
+        cep: formData.cep,
+        observacoes: formData.observacoes
+      }
+
       let clienteId = id
 
       if (isEditing) {
         const { error } = await supabase
           .from('clientes')
-          .update(formData)
+          .update({
+            ...clienteData,
+            atualizado_em: new Date().toISOString()
+          })
           .eq('id', id)
+        
         if (error) throw error
       } else {
         const { data, error } = await supabase
           .from('clientes')
-          .insert([formData])
+          .insert([clienteData])
           .select()
           .single()
+        
         if (error) throw error
         clienteId = data.id
-      }
 
-      // Salvar endereços temporários (para cliente novo)
-      const enderecosPendentes = enderecos.filter(e => e.isTemp)
-      if (enderecosPendentes.length > 0) {
-        const enderecosData = enderecosPendentes.map(e => ({
-          cliente_id: clienteId,
-          nome: e.nome,
-          endereco: e.endereco,
-          numero: e.numero,
-          complemento: e.complemento,
-          bairro: e.bairro,
-          cidade: e.cidade,
-          estado: e.estado,
-          cep: e.cep,
-          latitude: e.latitude ? parseFloat(e.latitude) : null,
-          longitude: e.longitude ? parseFloat(e.longitude) : null,
-          referencia: e.referencia,
-          contato_local: e.contato_local,
-          telefone_local: e.telefone_local,
-          observacoes: e.observacoes,
-          is_principal: e.is_principal
-        }))
-        
-        await supabase.from('cliente_enderecos').insert(enderecosData)
+        // Salvar endereços temporários
+        const enderecosTempList = enderecos.filter(e => e.isTemp)
+        if (enderecosTempList.length > 0) {
+          const enderecosData = enderecosTempList.map(e => ({
+            cliente_id: clienteId,
+            nome: e.nome,
+            endereco: e.endereco,
+            numero: e.numero,
+            complemento: e.complemento,
+            bairro: e.bairro,
+            cidade: e.cidade,
+            estado: e.estado,
+            cep: e.cep,
+            latitude: e.latitude ? parseFloat(e.latitude) : null,
+            longitude: e.longitude ? parseFloat(e.longitude) : null,
+            referencia: e.referencia,
+            contato_local: e.contato_local,
+            telefone_local: e.telefone_local,
+            observacoes: e.observacoes,
+            is_principal: e.is_principal
+          }))
+          
+          await supabase.from('cliente_enderecos').insert(enderecosData)
+        }
       }
 
       toast.success(isEditing ? 'Cliente atualizado!' : 'Cliente cadastrado!')
@@ -681,31 +708,82 @@ const ClienteForm = () => {
               </select>
             </div>
 
+            {/* Seletor de Tipo de Identificação */}
             <div>
-              <label className="label">
-                {formData.tipo_pessoa === 'juridica' ? 'CNPJ' : 'CPF'}
-              </label>
-              <div className="relative">
-                <input 
-                  type="text" 
-                  name="cpf_cnpj" 
-                  value={formData.cpf_cnpj} 
-                  onChange={handleCPFCNPJChange} 
-                  className={`input-field pr-10 ${errors.cpf_cnpj ? 'border-red-500' : ''}`}
-                  placeholder={formData.tipo_pessoa === 'juridica' ? '00.000.000/0000-00' : '000.000.000-00'}
-                  maxLength={formData.tipo_pessoa === 'juridica' ? 18 : 14}
-                />
-                {formData.cpf_cnpj && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2">
-                    {errors.cpf_cnpj ? (
-                      <AlertCircle className="w-5 h-5 text-red-500" />
-                    ) : formData.cpf_cnpj.length === (formData.tipo_pessoa === 'juridica' ? 18 : 14) ? (
-                      <Check className="w-5 h-5 text-green-500" />
-                    ) : null}
-                  </span>
-                )}
+              <label className="label">Identificar por</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleTipoIdentificacaoChange('documento')}
+                  className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                    formData.tipo_identificacao === 'documento'
+                      ? 'bg-blue-50 border-blue-500 text-blue-700'
+                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Building2 className="w-4 h-4" />
+                  {formData.tipo_pessoa === 'juridica' ? 'CNPJ' : 'CPF'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTipoIdentificacaoChange('contrato')}
+                  className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                    formData.tipo_identificacao === 'contrato'
+                      ? 'bg-green-50 border-green-500 text-green-700'
+                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <FileText className="w-4 h-4" />
+                  Nº Contrato
+                </button>
               </div>
             </div>
+
+            {/* Campo CPF/CNPJ - só aparece se tipo_identificacao for 'documento' */}
+            {formData.tipo_identificacao === 'documento' && (
+              <div>
+                <label className="label">
+                  {formData.tipo_pessoa === 'juridica' ? 'CNPJ' : 'CPF'}
+                </label>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    name="cpf_cnpj" 
+                    value={formData.cpf_cnpj} 
+                    onChange={handleCPFCNPJChange} 
+                    className={`input-field pr-10 ${errors.cpf_cnpj ? 'border-red-500' : ''}`}
+                    placeholder={formData.tipo_pessoa === 'juridica' ? '00.000.000/0000-00' : '000.000.000-00'}
+                    maxLength={formData.tipo_pessoa === 'juridica' ? 18 : 14}
+                  />
+                  {formData.cpf_cnpj && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                      {errors.cpf_cnpj ? (
+                        <AlertCircle className="w-5 h-5 text-red-500" />
+                      ) : formData.cpf_cnpj.length === (formData.tipo_pessoa === 'juridica' ? 18 : 14) ? (
+                        <Check className="w-5 h-5 text-green-500" />
+                      ) : null}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Campo Número de Contrato - só aparece se tipo_identificacao for 'contrato' */}
+            {formData.tipo_identificacao === 'contrato' && (
+              <div>
+                <label className="label">Número do Contrato</label>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    name="numero_contrato" 
+                    value={formData.numero_contrato} 
+                    onChange={handleChange} 
+                    className="input-field"
+                    placeholder="Ex: CONT-2024-001"
+                  />
+                </div>
+              </div>
+            )}
 
             <div>
               <label className="label">
@@ -799,9 +877,9 @@ const ClienteForm = () => {
                 value={formData.endereco} 
                 onChange={handleChange} 
                 className="input-field" 
-                placeholder="Rua, número, bairro" 
               />
             </div>
+            
             <div>
               <label className="label">Cidade</label>
               <input 
@@ -812,6 +890,7 @@ const ClienteForm = () => {
                 className="input-field" 
               />
             </div>
+            
             <div>
               <label className="label">Estado</label>
               <select 
@@ -829,7 +908,7 @@ const ClienteForm = () => {
           </div>
         </div>
 
-        {/* ENDEREÇOS DE OBRAS */}
+        {/* Endereços de Obras */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -839,24 +918,23 @@ const ClienteForm = () => {
               </h2>
               <p className="text-sm text-gray-500">Cadastre os locais onde serão realizados os serviços</p>
             </div>
-            <button
-              type="button"
+            <button 
+              type="button" 
               onClick={() => openEnderecoModal()}
-              className="btn-primary text-sm"
+              className="btn-primary"
             >
-              <Plus className="w-4 h-4" />
-              Adicionar Obra
+              <Plus className="w-4 h-4" /> Adicionar Obra
             </button>
           </div>
 
           {enderecos.length === 0 ? (
-            <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-              <MapPin className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+            <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-xl">
+              <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-3" />
               <p className="text-gray-500">Nenhum endereço de obra cadastrado</p>
-              <button
-                type="button"
+              <button 
+                type="button" 
                 onClick={() => openEnderecoModal()}
-                className="mt-3 text-blue-600 hover:text-blue-700 font-medium text-sm"
+                className="text-blue-600 hover:text-blue-700 font-medium mt-2"
               >
                 Adicionar primeiro endereço
               </button>
@@ -864,59 +942,55 @@ const ClienteForm = () => {
           ) : (
             <div className="space-y-3">
               {enderecos.map((endereco) => (
-                <div
+                <div 
                   key={endereco.id}
-                  className={`p-4 rounded-lg border-2 ${
+                  className={`p-4 rounded-xl border-2 ${
                     endereco.is_principal 
                       ? 'border-yellow-400 bg-yellow-50' 
-                      : 'border-gray-200 bg-white'
+                      : 'border-gray-200 bg-gray-50'
                   }`}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-semibold text-gray-900">{endereco.nome}</h3>
                         {endereco.is_principal && (
-                          <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <span className="px-2 py-0.5 bg-yellow-400 text-yellow-900 text-xs font-medium rounded-full flex items-center gap-1">
                             <Star className="w-3 h-3" /> Principal
                           </span>
                         )}
                         {endereco.isTemp && (
-                          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                          <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-medium rounded-full">
                             Pendente
                           </span>
                         )}
                       </div>
-                      <p className="text-gray-600 text-sm mt-1">
-                        {endereco.endereco}
-                        {endereco.numero && `, ${endereco.numero}`}
-                        {endereco.bairro && ` - ${endereco.bairro}`}
+                      <p className="text-sm text-gray-600">
+                        {[endereco.endereco, endereco.numero].filter(Boolean).join(', ')}
+                        {endereco.complemento ? ` - ${endereco.complemento}` : ''}
                       </p>
-                      <p className="text-gray-500 text-sm">
-                        {endereco.cidade && endereco.estado 
-                          ? `${endereco.cidade}/${endereco.estado}` 
-                          : endereco.cidade || endereco.estado || ''}
-                        {endereco.cep && ` - CEP: ${endereco.cep}`}
+                      <p className="text-sm text-gray-500">
+                        {[endereco.cidade, endereco.estado].filter(Boolean).join('/')}
+                        {endereco.cep ? ` - CEP: ${endereco.cep}` : ''}
                       </p>
-                      {(endereco.latitude && endereco.longitude) && (
-                        <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                      {endereco.latitude && endereco.longitude && (
+                        <a
+                          href={`https://www.google.com/maps?q=${endereco.latitude},${endereco.longitude}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-1"
+                        >
                           <Navigation className="w-3 h-3" />
                           GPS: {endereco.latitude}, {endereco.longitude}
-                        </p>
-                      )}
-                      {endereco.contato_local && (
-                        <p className="text-xs text-gray-500 mt-1">
-                          Contato: {endereco.contato_local}
-                          {endereco.telefone_local && ` - ${endereco.telefone_local}`}
-                        </p>
+                        </a>
                       )}
                     </div>
                     <div className="flex items-center gap-1">
                       {!endereco.is_principal && (
                         <button
                           type="button"
-                          onClick={() => setPrincipal(endereco)}
-                          className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg"
+                          onClick={() => setEnderecoPrincipal(endereco)}
+                          className="p-2 text-yellow-600 hover:bg-yellow-100 rounded-lg"
                           title="Definir como principal"
                         >
                           <Star className="w-4 h-4" />
@@ -925,7 +999,7 @@ const ClienteForm = () => {
                       <button
                         type="button"
                         onClick={() => openEnderecoModal(endereco)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                        className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
                         title="Editar"
                       >
                         <Edit className="w-4 h-4" />
@@ -933,7 +1007,7 @@ const ClienteForm = () => {
                       <button
                         type="button"
                         onClick={() => deleteEndereco(endereco)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                        className="p-2 text-red-600 hover:bg-red-100 rounded-lg"
                         title="Remover"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -952,10 +1026,10 @@ const ClienteForm = () => {
           <textarea 
             name="observacoes" 
             value={formData.observacoes} 
-            onChange={handleChange} 
-            rows={3} 
-            className="input-field" 
-            placeholder="Observações adicionais..." 
+            onChange={handleChange}
+            rows={4}
+            className="input-field"
+            placeholder="Observações adicionais..."
           />
         </div>
 
@@ -971,29 +1045,23 @@ const ClienteForm = () => {
         </div>
       </form>
 
-      {/* MODAL DE ENDEREÇO DE OBRA */}
+      {/* Modal de Endereço */}
       {showEnderecoModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6">
-          <div style={{maxWidth: "800px"}} className="bg-white rounded-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-            {/* Header */}
-            <div style={{padding: "24px 40px"}} className="sticky top-0 bg-white border-b flex items-center justify-between z-10">
-              <h3 className="text-xl font-semibold text-gray-900">
-                {enderecoEditando ? 'Editar Endereço de Obra' : 'Novo Endereço de Obra'}
-              </h3>
-              <button
-                onClick={() => setShowEnderecoModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500" />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-xl font-bold text-gray-900">
+                {enderecoEditando ? 'Editar Endereço' : 'Novo Endereço de Obra'}
+              </h2>
+              <button onClick={() => setShowEnderecoModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div style={{padding: "32px 40px"}} className="space-y-7">
+            <div className="p-6 overflow-y-auto max-h-[60vh] space-y-4">
               {/* Nome do Local */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nome do Local <span className="text-red-500">*</span>
-                </label>
+                <label className="label">Nome do Local *</label>
                 <input
                   type="text"
                   name="nome"
@@ -1005,9 +1073,9 @@ const ClienteForm = () => {
               </div>
 
               {/* CEP e Número */}
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">CEP</label>
+                  <label className="label">CEP</label>
                   <div className="relative">
                     <input
                       type="text"
@@ -1026,7 +1094,7 @@ const ClienteForm = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Nº</label>
+                  <label className="label">Nº</label>
                   <input
                     type="text"
                     name="numero"
@@ -1040,7 +1108,7 @@ const ClienteForm = () => {
 
               {/* Endereço */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Endereço</label>
+                <label className="label">Endereço</label>
                 <input
                   type="text"
                   name="endereco"
@@ -1052,9 +1120,9 @@ const ClienteForm = () => {
               </div>
 
               {/* Complemento + Bairro */}
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Complemento</label>
+                  <label className="label">Complemento</label>
                   <input
                     type="text"
                     name="complemento"
@@ -1065,7 +1133,7 @@ const ClienteForm = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Bairro</label>
+                  <label className="label">Bairro</label>
                   <input
                     type="text"
                     name="bairro"
@@ -1077,9 +1145,9 @@ const ClienteForm = () => {
               </div>
 
               {/* Cidade + Estado */}
-              <div className="grid grid-cols-3 gap-6">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Cidade</label>
+                  <label className="label">Cidade</label>
                   <input
                     type="text"
                     name="cidade"
@@ -1089,7 +1157,7 @@ const ClienteForm = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Estado</label>
+                  <label className="label">Estado</label>
                   <select
                     name="estado"
                     value={enderecoForm.estado}
@@ -1106,20 +1174,20 @@ const ClienteForm = () => {
 
               {/* Coordenadas GPS */}
               <div className="pt-2">
-                <div className="flex items-center justify-between mb-4">
-                  <label className="block text-sm font-medium text-gray-700">Coordenadas GPS</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="label mb-0">Coordenadas GPS</label>
                   <button
                     type="button"
                     onClick={getMyLocation}
-                    className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1.5"
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
                   >
                     <MapPin className="w-4 h-4" />
                     Usar minha localização
                   </button>
                 </div>
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm text-gray-500 mb-2">Latitude</label>
+                    <label className="text-xs text-gray-500">Latitude</label>
                     <input
                       type="text"
                       name="latitude"
@@ -1130,7 +1198,7 @@ const ClienteForm = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-500 mb-2">Longitude</label>
+                    <label className="text-xs text-gray-500">Longitude</label>
                     <input
                       type="text"
                       name="longitude"
@@ -1141,14 +1209,11 @@ const ClienteForm = () => {
                     />
                   </div>
                 </div>
-                <p className="text-sm text-gray-500 mt-3">
-                  📍 Coordenadas facilitam a navegação da equipe até o local
-                </p>
               </div>
 
               {/* Ponto de Referência */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Ponto de Referência</label>
+                <label className="label">Ponto de Referência</label>
                 <input
                   type="text"
                   name="referencia"
@@ -1160,9 +1225,9 @@ const ClienteForm = () => {
               </div>
 
               {/* Contato no Local */}
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Contato no Local</label>
+                  <label className="label">Contato no Local</label>
                   <input
                     type="text"
                     name="contato_local"
@@ -1173,7 +1238,7 @@ const ClienteForm = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Telefone</label>
+                  <label className="label">Telefone</label>
                   <input
                     type="text"
                     name="telefone_local"
@@ -1188,7 +1253,7 @@ const ClienteForm = () => {
 
               {/* Observações */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Observações</label>
+                <label className="label">Observações</label>
                 <textarea
                   name="observacoes"
                   value={enderecoForm.observacoes}
@@ -1217,18 +1282,18 @@ const ClienteForm = () => {
             </div>
 
             {/* Footer */}
-            <div style={{padding: "20px 40px"}} className="sticky bottom-0 bg-gray-50 border-t flex gap-4 justify-center">
+            <div className="flex gap-3 p-6 border-t bg-gray-50">
               <button
                 type="button"
                 onClick={() => setShowEnderecoModal(false)}
-                className="btn-secondary px-8 py-2.5"
+                className="btn-secondary flex-1"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={saveEndereco}
-                className="btn-primary px-8 py-2.5"
+                className="btn-primary flex-1"
               >
                 <Save className="w-4 h-4" />
                 {enderecoEditando ? 'Atualizar' : 'Adicionar'}
