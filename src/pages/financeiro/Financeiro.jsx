@@ -58,6 +58,14 @@ const Financeiro = () => {
   const [abaAtiva, setAbaAtiva] = useState('visao-geral')
   const [periodoFiltro, setPeriodoFiltro] = useState('mes-atual')
   
+  // Estados para Filtros de Lançamentos
+  const [lancTipoFiltro, setLancTipoFiltro] = useState('')
+  const [lancStatusFiltro, setLancStatusFiltro] = useState('')
+  const [lancDataInicio, setLancDataInicio] = useState('')
+  const [lancDataFim, setLancDataFim] = useState('')
+  const [lancPagina, setLancPagina] = useState(1)
+  const lancPorPagina = 20
+  
   // Estados para Fechamento de Período
   const [dataInicio, setDataInicio] = useState(() => {
     const d = new Date()
@@ -214,14 +222,20 @@ const Financeiro = () => {
     enabled: abaAtiva === 'fechamento'
   })
 
-  // Cálculos do período
+  // Cálculos do período - Corrigido para evitar problemas de timezone
   const hoje = new Date()
-  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
-  const fimMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)
+  const anoAtual = hoje.getFullYear()
+  const mesAtual = hoje.getMonth()
+  
+  // Formata datas como YYYY-MM-DD para comparação segura
+  const inicioMesStr = `${anoAtual}-${String(mesAtual + 1).padStart(2, '0')}-01`
+  const ultimoDia = new Date(anoAtual, mesAtual + 1, 0).getDate()
+  const fimMesStr = `${anoAtual}-${String(mesAtual + 1).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`
 
   const lancamentosMes = lancamentos?.filter(l => {
-    const data = new Date(l.data_vencimento)
-    return data >= inicioMes && data <= fimMes
+    if (!l.data_vencimento) return false
+    const dataStr = l.data_vencimento.split('T')[0] // Pega apenas YYYY-MM-DD
+    return dataStr >= inicioMesStr && dataStr <= fimMesStr
   }) || []
 
   // Totais
@@ -252,8 +266,10 @@ const Financeiro = () => {
     .reduce((sum, l) => sum + (parseFloat(l.valor) || 0), 0)
 
   const lancamentosAtrasados = lancamentos?.filter(l => {
-    const data = new Date(l.data_vencimento)
-    return data < hoje && l.status === 'pendente'
+    if (!l.data_vencimento) return false
+    const dataStr = l.data_vencimento.split('T')[0]
+    const hojeStr = hoje.toISOString().split('T')[0]
+    return dataStr < hojeStr && l.status === 'pendente'
   }) || []
 
   const valorAtrasado = lancamentosAtrasados
@@ -311,26 +327,30 @@ const Financeiro = () => {
 
   // Dados para DRE
   const dadosDRE = useMemo(() => {
-    let inicio, fim
+    let inicioStr, fimStr
     
     if (drePeriodo === 'mes-atual') {
-      inicio = inicioMes
-      fim = fimMes
+      inicioStr = inicioMesStr
+      fimStr = fimMesStr
     } else if (drePeriodo === 'mes-anterior') {
-      inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1)
-      fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0)
+      const mesAnterior = mesAtual === 0 ? 11 : mesAtual - 1
+      const anoMesAnterior = mesAtual === 0 ? anoAtual - 1 : anoAtual
+      const ultimoDiaMesAnt = new Date(anoMesAnterior, mesAnterior + 1, 0).getDate()
+      inicioStr = `${anoMesAnterior}-${String(mesAnterior + 1).padStart(2, '0')}-01`
+      fimStr = `${anoMesAnterior}-${String(mesAnterior + 1).padStart(2, '0')}-${String(ultimoDiaMesAnt).padStart(2, '0')}`
     } else if (drePeriodo === 'ano-atual') {
-      inicio = new Date(hoje.getFullYear(), 0, 1)
-      fim = new Date(hoje.getFullYear(), 11, 31)
+      inicioStr = `${anoAtual}-01-01`
+      fimStr = `${anoAtual}-12-31`
     } else {
-      inicio = new Date(dreDataInicio)
-      fim = new Date(dreDataFim)
+      inicioStr = dreDataInicio
+      fimStr = dreDataFim
     }
     
     // Filtrar OS do período
     const osPeriodo = osComCalculos.filter(os => {
-      const data = new Date(os.data_agendamento)
-      return data >= inicio && data <= fim && os.status === 'concluida'
+      if (!os.data_agendamento) return false
+      const dataStr = os.data_agendamento.split('T')[0]
+      return dataStr >= inicioStr && dataStr <= fimStr && os.status === 'concluida'
     })
     
     // Receitas
@@ -347,7 +367,7 @@ const Financeiro = () => {
     const margemOperacional = receitaServicos > 0 ? (lucroOperacional / receitaServicos) * 100 : 0
     
     return {
-      periodo: { inicio, fim },
+      periodo: { inicio: inicioStr, fim: fimStr },
       quantidadeOS: osPeriodo.length,
       receitaServicos,
       custoMaoObra,
@@ -358,7 +378,7 @@ const Financeiro = () => {
       lucroOperacional,
       margemOperacional
     }
-  }, [osComCalculos, drePeriodo, dreDataInicio, dreDataFim])
+  }, [osComCalculos, drePeriodo, dreDataInicio, dreDataFim, inicioMesStr, fimMesStr, mesAtual, anoAtual])
 
   // Dados para gráficos
   const dadosPorCategoria = () => {
@@ -380,25 +400,33 @@ const Financeiro = () => {
   const fluxoCaixaMensal = () => {
     const meses = []
     for (let i = 5; i >= 0; i--) {
-      const data = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1)
-      const fim = new Date(hoje.getFullYear(), hoje.getMonth() - i + 1, 0)
+      const ano = hoje.getFullYear()
+      const mes = hoje.getMonth() - i
+      const dataRef = new Date(ano, mes, 1)
+      const ultimoDia = new Date(ano, mes + 1, 0).getDate()
+      
+      // Formato YYYY-MM-DD para comparação segura
+      const inicioStr = `${dataRef.getFullYear()}-${String(dataRef.getMonth() + 1).padStart(2, '0')}-01`
+      const fimStr = `${dataRef.getFullYear()}-${String(dataRef.getMonth() + 1).padStart(2, '0')}-${String(ultimoDia).padStart(2, '0')}`
       
       const receitas = lancamentos
         ?.filter(l => {
-          const dataL = new Date(l.data_vencimento)
-          return dataL >= data && dataL <= fim && l.tipo === 'receita'
+          if (!l.data_vencimento) return false
+          const dataStr = l.data_vencimento.split('T')[0]
+          return dataStr >= inicioStr && dataStr <= fimStr && l.tipo === 'receita'
         })
         .reduce((sum, l) => sum + (parseFloat(l.valor) || 0), 0) || 0
 
       const despesas = lancamentos
         ?.filter(l => {
-          const dataL = new Date(l.data_vencimento)
-          return dataL >= data && dataL <= fim && l.tipo === 'despesa'
+          if (!l.data_vencimento) return false
+          const dataStr = l.data_vencimento.split('T')[0]
+          return dataStr >= inicioStr && dataStr <= fimStr && l.tipo === 'despesa'
         })
         .reduce((sum, l) => sum + (parseFloat(l.valor) || 0), 0) || 0
 
       meses.push({
-        mes: data.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''),
+        mes: dataRef.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''),
         receitas,
         despesas,
         saldo: receitas - despesas
@@ -426,7 +454,9 @@ const Financeiro = () => {
 
   const formatDate = (date) => {
     if (!date) return '-'
-    return new Date(date).toLocaleDateString('pt-BR')
+    // Corrige problema de timezone: adiciona T12:00:00 para evitar conversão errada
+    const dateStr = date.includes('T') ? date : `${date}T12:00:00`
+    return new Date(dateStr).toLocaleDateString('pt-BR')
   }
 
   const CustomTooltip = ({ active, payload, label }) => {
@@ -610,79 +640,266 @@ const Financeiro = () => {
 
       {abaAtiva === 'lancamentos' && (
         <div className="space-y-4">
+          {/* Filtros */}
           <div className="card">
-            <div className="flex flex-wrap items-center gap-4">
-              <select className="input w-auto">
-                <option value="">Todos os tipos</option>
-                <option value="receita">Receitas</option>
-                <option value="despesa">Despesas</option>
-              </select>
-              <select className="input w-auto">
-                <option value="">Todos os status</option>
-                <option value="pendente">Pendente</option>
-                <option value="pago">Pago</option>
-                <option value="atrasado">Atrasado</option>
-              </select>
+            <div className="flex flex-wrap items-end gap-4">
+              <div>
+                <label className="label">Tipo</label>
+                <select 
+                  value={lancTipoFiltro}
+                  onChange={(e) => { setLancTipoFiltro(e.target.value); setLancPagina(1) }}
+                  className="input-field w-auto"
+                >
+                  <option value="">Todos os tipos</option>
+                  <option value="receita">Receitas</option>
+                  <option value="despesa">Despesas</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Status</label>
+                <select 
+                  value={lancStatusFiltro}
+                  onChange={(e) => { setLancStatusFiltro(e.target.value); setLancPagina(1) }}
+                  className="input-field w-auto"
+                >
+                  <option value="">Todos os status</option>
+                  <option value="pendente">Pendente</option>
+                  <option value="pago">Pago</option>
+                  <option value="cancelado">Cancelado</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Data Início</label>
+                <input
+                  type="date"
+                  value={lancDataInicio}
+                  onChange={(e) => { setLancDataInicio(e.target.value); setLancPagina(1) }}
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="label">Data Fim</label>
+                <input
+                  type="date"
+                  value={lancDataFim}
+                  onChange={(e) => { setLancDataFim(e.target.value); setLancPagina(1) }}
+                  className="input-field"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const hoje = new Date()
+                    const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
+                    setLancDataInicio(inicioMes.toISOString().split('T')[0])
+                    setLancDataFim(hoje.toISOString().split('T')[0])
+                    setLancPagina(1)
+                  }}
+                  className="btn-secondary text-sm"
+                >
+                  Mês Atual
+                </button>
+                <button
+                  onClick={() => {
+                    const hoje = new Date()
+                    const inicioMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1)
+                    const fimMesAnterior = new Date(hoje.getFullYear(), hoje.getMonth(), 0)
+                    setLancDataInicio(inicioMesAnterior.toISOString().split('T')[0])
+                    setLancDataFim(fimMesAnterior.toISOString().split('T')[0])
+                    setLancPagina(1)
+                  }}
+                  className="btn-secondary text-sm"
+                >
+                  Mês Anterior
+                </button>
+                <button
+                  onClick={() => {
+                    setLancTipoFiltro('')
+                    setLancStatusFiltro('')
+                    setLancDataInicio('')
+                    setLancDataFim('')
+                    setLancPagina(1)
+                  }}
+                  className="btn-secondary text-sm text-red-600"
+                >
+                  Limpar
+                </button>
+              </div>
             </div>
           </div>
 
-          <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vencimento</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Categoria</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {lancamentos?.slice(0, 20).map((l) => {
-                    const atrasado = new Date(l.data_vencimento) < hoje && l.status === 'pendente'
-                    return (
-                      <tr key={l.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <span className={atrasado ? 'text-red-600 font-medium' : ''}>
-                            {formatDate(l.data_vencimento)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <Link to={`/financeiro/${l.id}`} className="font-medium text-gray-900 hover:text-blue-600">
-                            {l.descricao}
-                          </Link>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span 
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs"
-                            style={{ backgroundColor: `${l.categoria?.cor}20`, color: l.categoria?.cor }}
-                          >
-                            {l.categoria?.nome || 'Sem categoria'}
-                          </span>
-                        </td>
-                        <td className={`px-4 py-3 text-right font-medium ${l.tipo === 'receita' ? 'text-green-600' : 'text-red-600'}`}>
-                          {l.tipo === 'receita' ? '+' : '-'} {formatCurrency(l.valor)}
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                            l.status === 'pago' ? 'bg-green-100 text-green-700' :
-                            atrasado ? 'bg-red-100 text-red-700' :
-                            'bg-yellow-100 text-yellow-700'
-                          }`}>
-                            {l.status === 'pago' && <CheckCircle2 className="w-3 h-3" />}
-                            {l.status === 'pendente' && !atrasado && <Clock className="w-3 h-3" />}
-                            {atrasado && <AlertTriangle className="w-3 h-3" />}
-                            {atrasado ? 'Atrasado' : l.status.charAt(0).toUpperCase() + l.status.slice(1)}
-                          </span>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          {/* Tabela de Lançamentos */}
+          {(() => {
+            // Filtrar lançamentos
+            const lancamentosFiltrados = lancamentos?.filter(l => {
+              if (lancTipoFiltro && l.tipo !== lancTipoFiltro) return false
+              if (lancStatusFiltro && l.status !== lancStatusFiltro) return false
+              if (lancDataInicio) {
+                const dataStr = l.data_vencimento?.split('T')[0]
+                if (dataStr < lancDataInicio) return false
+              }
+              if (lancDataFim) {
+                const dataStr = l.data_vencimento?.split('T')[0]
+                if (dataStr > lancDataFim) return false
+              }
+              return true
+            }) || []
+
+            const totalPaginas = Math.ceil(lancamentosFiltrados.length / lancPorPagina)
+            const lancamentosPagina = lancamentosFiltrados.slice(
+              (lancPagina - 1) * lancPorPagina,
+              lancPagina * lancPorPagina
+            )
+
+            // Totais do filtro
+            const totalReceitas = lancamentosFiltrados
+              .filter(l => l.tipo === 'receita')
+              .reduce((sum, l) => sum + (parseFloat(l.valor) || 0), 0)
+            const totalDespesas = lancamentosFiltrados
+              .filter(l => l.tipo === 'despesa')
+              .reduce((sum, l) => sum + (parseFloat(l.valor) || 0), 0)
+
+            return (
+              <>
+                {/* Resumo do Filtro */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                  <div className="card bg-gray-50">
+                    <p className="text-sm text-gray-500">Total de Registros</p>
+                    <p className="text-2xl font-bold text-gray-900">{lancamentosFiltrados.length}</p>
+                  </div>
+                  <div className="card bg-green-50">
+                    <p className="text-sm text-gray-500">Total Receitas</p>
+                    <p className="text-2xl font-bold text-green-600">{formatCurrency(totalReceitas)}</p>
+                  </div>
+                  <div className="card bg-red-50">
+                    <p className="text-sm text-gray-500">Total Despesas</p>
+                    <p className="text-2xl font-bold text-red-600">{formatCurrency(totalDespesas)}</p>
+                  </div>
+                  <div className={`card ${totalReceitas - totalDespesas >= 0 ? 'bg-blue-50' : 'bg-orange-50'}`}>
+                    <p className="text-sm text-gray-500">Saldo</p>
+                    <p className={`text-2xl font-bold ${totalReceitas - totalDespesas >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
+                      {formatCurrency(totalReceitas - totalDespesas)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tabela */}
+                <div className="card overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vencimento</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Categoria</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {lancamentosPagina.length === 0 ? (
+                          <tr>
+                            <td colSpan="5" className="px-4 py-8 text-center text-gray-500">
+                              Nenhum lançamento encontrado
+                            </td>
+                          </tr>
+                        ) : (
+                          lancamentosPagina.map((l) => {
+                            const dataStr = l.data_vencimento?.split('T')[0]
+                            const hojeStr = new Date().toISOString().split('T')[0]
+                            const atrasado = dataStr < hojeStr && l.status === 'pendente'
+                            return (
+                              <tr key={l.id} className="hover:bg-gray-50">
+                                <td className="px-4 py-3">
+                                  <span className={atrasado ? 'text-red-600 font-medium' : ''}>
+                                    {formatDate(l.data_vencimento)}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <Link to={`/financeiro/${l.id}`} className="font-medium text-gray-900 hover:text-blue-600">
+                                    {l.descricao}
+                                  </Link>
+                                  {l.cliente?.nome && (
+                                    <p className="text-xs text-gray-500">{l.cliente.nome}</p>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span 
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs"
+                                    style={{ backgroundColor: `${l.categoria?.cor || '#6B7280'}20`, color: l.categoria?.cor || '#6B7280' }}
+                                  >
+                                    {l.categoria?.nome || 'Sem categoria'}
+                                  </span>
+                                </td>
+                                <td className={`px-4 py-3 text-right font-medium ${l.tipo === 'receita' ? 'text-green-600' : 'text-red-600'}`}>
+                                  {l.tipo === 'receita' ? '+' : '-'} {formatCurrency(l.valor)}
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                  <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                                    l.status === 'pago' ? 'bg-green-100 text-green-700' :
+                                    l.status === 'cancelado' ? 'bg-gray-100 text-gray-700' :
+                                    atrasado ? 'bg-red-100 text-red-700' :
+                                    'bg-yellow-100 text-yellow-700'
+                                  }`}>
+                                    {l.status === 'pago' && <CheckCircle2 className="w-3 h-3" />}
+                                    {l.status === 'pendente' && !atrasado && <Clock className="w-3 h-3" />}
+                                    {atrasado && <AlertTriangle className="w-3 h-3" />}
+                                    {atrasado ? 'Atrasado' : l.status.charAt(0).toUpperCase() + l.status.slice(1)}
+                                  </span>
+                                </td>
+                              </tr>
+                            )
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Paginação */}
+                  {totalPaginas > 1 && (
+                    <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
+                      <p className="text-sm text-gray-500">
+                        Mostrando {((lancPagina - 1) * lancPorPagina) + 1} a {Math.min(lancPagina * lancPorPagina, lancamentosFiltrados.length)} de {lancamentosFiltrados.length}
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setLancPagina(1)}
+                          disabled={lancPagina === 1}
+                          className="px-3 py-1 rounded border bg-white text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                        >
+                          Primeira
+                        </button>
+                        <button
+                          onClick={() => setLancPagina(prev => Math.max(1, prev - 1))}
+                          disabled={lancPagina === 1}
+                          className="px-3 py-1 rounded border bg-white text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                        >
+                          Anterior
+                        </button>
+                        <span className="px-3 py-1 text-sm font-medium">
+                          Página {lancPagina} de {totalPaginas}
+                        </span>
+                        <button
+                          onClick={() => setLancPagina(prev => Math.min(totalPaginas, prev + 1))}
+                          disabled={lancPagina === totalPaginas}
+                          className="px-3 py-1 rounded border bg-white text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                        >
+                          Próxima
+                        </button>
+                        <button
+                          onClick={() => setLancPagina(totalPaginas)}
+                          disabled={lancPagina === totalPaginas}
+                          className="px-3 py-1 rounded border bg-white text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                        >
+                          Última
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )
+          })()}
         </div>
       )}
 
