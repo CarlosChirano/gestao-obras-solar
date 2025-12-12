@@ -109,6 +109,7 @@ const Financeiro = () => {
         .select(`
           *,
           categoria:categorias_financeiras(nome, cor, tipo),
+          plano_conta:plano_contas(id, codigo, nome, tipo),
           conta:contas_bancarias(nome),
           cliente:clientes(nome),
           colaborador:colaboradores(nome)
@@ -791,7 +792,7 @@ const Financeiro = () => {
                         <tr>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vencimento</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Descrição</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Categoria</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Plano de Contas</th>
                           <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Valor</th>
                           <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
                         </tr>
@@ -824,12 +825,21 @@ const Financeiro = () => {
                                   )}
                                 </td>
                                 <td className="px-4 py-3">
-                                  <span 
-                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs"
-                                    style={{ backgroundColor: `${l.categoria?.cor || '#6B7280'}20`, color: l.categoria?.cor || '#6B7280' }}
-                                  >
-                                    {l.categoria?.nome || 'Sem categoria'}
-                                  </span>
+                                  {l.plano_conta ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-700">
+                                      <span className="font-mono text-blue-500">{l.plano_conta.codigo}</span>
+                                      {l.plano_conta.nome}
+                                    </span>
+                                  ) : l.categoria ? (
+                                    <span 
+                                      className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs"
+                                      style={{ backgroundColor: `${l.categoria?.cor || '#6B7280'}20`, color: l.categoria?.cor || '#6B7280' }}
+                                    >
+                                      {l.categoria?.nome || 'Sem categoria'}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-400 text-xs">Sem categoria</span>
+                                  )}
                                 </td>
                                 <td className={`px-4 py-3 text-right font-medium ${l.tipo === 'receita' ? 'text-green-600' : 'text-red-600'}`}>
                                   {l.tipo === 'receita' ? '+' : '-'} {formatCurrency(l.valor)}
