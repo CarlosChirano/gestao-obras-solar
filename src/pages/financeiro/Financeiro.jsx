@@ -381,18 +381,31 @@ const Financeiro = () => {
     }
   }, [osComCalculos, drePeriodo, dreDataInicio, dreDataFim, inicioMesStr, fimMesStr, mesAtual, anoAtual])
 
-  // Dados para gráficos
-  const dadosPorCategoria = () => {
+  // Dados para gráficos - Por Plano de Contas
+  const dadosPorPlanoContas = () => {
     const agrupado = {}
+    const cores = ['#3b82f6', '#22c55e', '#f97316', '#8b5cf6', '#ec4899', '#14b8a6', '#f59e0b', '#6366f1']
+    let corIndex = 0
+    
     lancamentosMes.forEach(l => {
-      const cat = l.categoria?.nome || 'Sem categoria'
-      if (!agrupado[cat]) {
-        agrupado[cat] = { nome: cat, receita: 0, despesa: 0, cor: l.categoria?.cor || '#6B7280' }
+      // Prioriza plano_conta, senão usa categoria antiga
+      const nome = l.plano_conta?.nome || l.categoria?.nome || 'Sem categoria'
+      const codigo = l.plano_conta?.codigo || ''
+      const chave = codigo ? `${codigo} ${nome}` : nome
+      
+      if (!agrupado[chave]) {
+        agrupado[chave] = { 
+          nome: chave, 
+          receita: 0, 
+          despesa: 0, 
+          cor: l.categoria?.cor || cores[corIndex % cores.length]
+        }
+        corIndex++
       }
       if (l.tipo === 'receita') {
-        agrupado[cat].receita += parseFloat(l.valor) || 0
+        agrupado[chave].receita += parseFloat(l.valor) || 0
       } else {
-        agrupado[cat].despesa += parseFloat(l.valor) || 0
+        agrupado[chave].despesa += parseFloat(l.valor) || 0
       }
     })
     return Object.values(agrupado).sort((a, b) => (b.receita + b.despesa) - (a.receita + a.despesa)).slice(0, 8)
@@ -615,19 +628,19 @@ const Financeiro = () => {
             </div>
 
             <div className="card">
-              <h3 className="text-lg font-semibold mb-4">Por Categoria</h3>
+              <h3 className="text-lg font-semibold mb-4">Despesas por Plano de Contas</h3>
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
-                    data={dadosPorCategoria()}
+                    data={dadosPorPlanoContas()}
                     cx="50%"
                     cy="50%"
                     outerRadius={100}
                     dataKey="despesa"
                     nameKey="nome"
-                    label={({ nome, percent }) => `${nome} (${(percent * 100).toFixed(0)}%)`}
+                    label={({ nome, percent }) => `${nome.length > 20 ? nome.substring(0, 20) + '...' : nome} (${(percent * 100).toFixed(0)}%)`}
                   >
-                    {dadosPorCategoria().map((entry, index) => (
+                    {dadosPorPlanoContas().map((entry, index) => (
                       <Cell key={index} fill={entry.cor} />
                     ))}
                   </Pie>
