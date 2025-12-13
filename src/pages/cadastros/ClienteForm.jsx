@@ -1049,7 +1049,7 @@ const ClienteForm = () => {
       {showEnderecoModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
-            <div className="flex items-center justify-between p-6 border-b">
+            <div className="flex items-center justify-between p-8 border-b">
               <h2 className="text-xl font-bold text-gray-900">
                 {enderecoEditando ? 'Editar Endereço' : 'Novo Endereço de Obra'}
               </h2>
@@ -1058,7 +1058,7 @@ const ClienteForm = () => {
               </button>
             </div>
 
-            <div className="p-6 overflow-y-auto max-h-[60vh] space-y-4">
+            <div className="p-8 overflow-y-auto max-h-[60vh] space-y-5">
               {/* Nome do Local */}
               <div>
                 <label className="label">Nome do Local *</label>
@@ -1073,7 +1073,7 @@ const ClienteForm = () => {
               </div>
 
               {/* CEP e Número */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-5">
                 <div>
                   <label className="label">CEP</label>
                   <div className="relative">
@@ -1120,7 +1120,7 @@ const ClienteForm = () => {
               </div>
 
               {/* Complemento + Bairro */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-5">
                 <div>
                   <label className="label">Complemento</label>
                   <input
@@ -1145,7 +1145,7 @@ const ClienteForm = () => {
               </div>
 
               {/* Cidade + Estado */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-3 gap-5">
                 <div className="col-span-2">
                   <label className="label">Cidade</label>
                   <input
@@ -1185,7 +1185,7 @@ const ClienteForm = () => {
                     Usar minha localização
                   </button>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-5">
                   <div>
                     <label className="text-xs text-gray-500">Latitude</label>
                     <input
@@ -1225,7 +1225,7 @@ const ClienteForm = () => {
               </div>
 
               {/* Contato no Local */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-5">
                 <div>
                   <label className="label">Contato no Local</label>
                   <input
@@ -1282,7 +1282,7 @@ const ClienteForm = () => {
             </div>
 
             {/* Footer */}
-            <div className="flex gap-3 p-6 border-t bg-gray-50">
+            <div className="flex gap-4 p-8 border-t bg-gray-50">
               <button
                 type="button"
                 onClick={() => setShowEnderecoModal(false)}
