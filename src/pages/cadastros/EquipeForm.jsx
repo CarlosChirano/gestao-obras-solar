@@ -148,6 +148,21 @@ const EquipeForm = () => {
     try {
       let equipeId = id
 
+      // Verificar se já existe uma equipe com esse nome (para nova equipe)
+      if (!isEditing) {
+        const { data: existente } = await supabase
+          .from('equipes')
+          .select('id, nome')
+          .ilike('nome', formData.nome.trim())
+          .single()
+        
+        if (existente) {
+          toast.error(`Já existe uma equipe com o nome "${existente.nome}". Edite a existente ou use outro nome.`)
+          setLoading(false)
+          return
+        }
+      }
+
       if (isEditing) {
         // Atualizar equipe
         const { error } = await supabase
@@ -202,7 +217,12 @@ const EquipeForm = () => {
       navigate('/equipes')
 
     } catch (error) {
-      toast.error('Erro ao salvar: ' + error.message)
+      console.error('Erro ao salvar equipe:', error)
+      if (error.message?.includes('equipes_nome_key')) {
+        toast.error(`Já existe uma equipe com esse nome. Use outro nome ou edite a existente.`)
+      } else {
+        toast.error('Erro ao salvar: ' + error.message)
+      }
     } finally {
       setLoading(false)
     }
