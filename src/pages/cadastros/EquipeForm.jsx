@@ -150,14 +150,13 @@ const EquipeForm = () => {
 
       // Verificar se já existe uma equipe com esse nome (para nova equipe)
       if (!isEditing) {
-        const { data: existente } = await supabase
+        const { data: existentes } = await supabase
           .from('equipes')
           .select('id, nome')
           .ilike('nome', formData.nome.trim())
-          .single()
         
-        if (existente) {
-          toast.error(`Já existe uma equipe com o nome "${existente.nome}". Edite a existente ou use outro nome.`)
+        if (existentes && existentes.length > 0) {
+          toast.error(`Já existe uma equipe com o nome "${existentes[0].nome}". Edite a existente ou use outro nome.`)
           setLoading(false)
           return
         }
