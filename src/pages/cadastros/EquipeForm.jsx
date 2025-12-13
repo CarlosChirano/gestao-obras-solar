@@ -45,17 +45,10 @@ const EquipeForm = () => {
   const loadEquipe = async () => {
     setLoadingData(true)
     try {
+      // Buscar equipe
       const { data, error } = await supabase
         .from('equipes')
-        .select(`
-          *,
-          equipe_membros(
-            id,
-            colaborador_id,
-            funcao_na_equipe,
-            colaborador:colaboradores(id, nome)
-          )
-        `)
+        .select('*')
         .eq('id', id)
         .single()
 
@@ -67,14 +60,28 @@ const EquipeForm = () => {
         cor: data.cor || '#3B82F6'
       })
 
-      setMembros(data.equipe_membros?.map(m => ({
-        id: m.id,
-        colaborador_id: m.colaborador_id,
-        funcao_na_equipe: m.funcao_na_equipe || '',
-        colaborador_nome: m.colaborador?.nome
-      })) || [])
+      // Buscar membros separadamente
+      const { data: membrosData, error: membrosError } = await supabase
+        .from('equipe_membros')
+        .select(`
+          id,
+          colaborador_id,
+          funcao_na_equipe,
+          colaborador:colaboradores(id, nome)
+        `)
+        .eq('equipe_id', id)
+
+      if (!membrosError && membrosData) {
+        setMembros(membrosData.map(m => ({
+          id: m.id,
+          colaborador_id: m.colaborador_id,
+          funcao_na_equipe: m.funcao_na_equipe || '',
+          colaborador_nome: m.colaborador?.nome
+        })))
+      }
 
     } catch (error) {
+      console.error('Erro ao carregar equipe:', error)
       toast.error('Erro ao carregar equipe')
       navigate('/equipes')
     } finally {
