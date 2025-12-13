@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
-import { Plus, Search, Edit, Trash2, Users, Loader2 } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Users, Loader2, AlertCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const Equipes = () => {
@@ -10,28 +10,71 @@ const Equipes = () => {
   const [deleteId, setDeleteId] = useState(null)
   const queryClient = useQueryClient()
 
-  const { data: equipes, isLoading } = useQuery({
+  const { data: equipes, isLoading, error } = useQuery({
     queryKey: ['equipes'],
     queryFn: async () => {
+      console.log('Buscando equipes...')
+      
+      // Query simplificada primeiro
       const { data, error } = await supabase
         .from('equipes')
         .select(`
-          *,
-          equipe_membros(
-            id,
-            colaborador:colaboradores(id, nome),
-            funcao_na_equipe
-          )
+          id,
+          nome,
+          descricao,
+          cor,
+          ativo,
+          created_at
         `)
         .eq('ativo', true)
         .order('nome')
-      if (error) throw error
-      return data
+      
+      if (error) {
+        console.error('Erro ao buscar equipes:', error)
+        throw error
+      }
+      
+      console.log('Equipes encontradas:', data)
+      
+      // Agora buscar membros separadamente para cada equipe
+      if (data && data.length > 0) {
+        const equipesComMembros = await Promise.all(
+          data.map(async (equipe) => {
+            const { data: membros, error: membrosError } = await supabase
+              .from('equipe_membros')
+              .select(`
+                id,
+                funcao_na_equipe,
+                colaborador:colaboradores(id, nome)
+              `)
+              .eq('equipe_id', equipe.id)
+            
+            if (membrosError) {
+              console.error('Erro ao buscar membros da equipe:', equipe.nome, membrosError)
+            }
+            
+            return {
+              ...equipe,
+              equipe_membros: membros || []
+            }
+          })
+        )
+        return equipesComMembros
+      }
+      
+      return data || []
     }
   })
 
   const deleteMutation = useMutation({
     mutationFn: async (id) => {
+      // Primeiro remove os membros
+      await supabase
+        .from('equipe_membros')
+        .delete()
+        .eq('equipe_id', id)
+      
+      // Depois desativa a equipe
       const { error } = await supabase
         .from('equipes')
         .update({ ativo: false })
@@ -43,13 +86,49 @@ const Equipes = () => {
       toast.success('Equipe excluída!')
       setDeleteId(null)
     },
-    onError: () => toast.error('Erro ao excluir')
+    onError: (error) => {
+      console.error('Erro ao excluir:', error)
+      toast.error('Erro ao excluir: ' + error.message)
+    }
   })
 
   const filtered = equipes?.filter(e =>
-    e.nome.toLowerCase().includes(search.toLowerCase()) ||
+    e.nome?.toLowerCase().includes(search.toLowerCase()) ||
     e.descricao?.toLowerCase().includes(search.toLowerCase())
   )
+
+  // Mostrar erro se houver
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Equipes</h1>
+            <p className="text-gray-600">Gerencie as equipes de trabalho</p>
+          </div>
+          <Link to="/equipes/nova" className="btn-primary">
+            <Plus className="w-5 h-5" /> Nova Equipe
+          </Link>
+        </div>
+        
+        <div className="card bg-red-50 border-red-200">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-semibold text-red-800">Erro ao carregar equipes</h3>
+              <p className="text-red-600 mt-1">{error.message}</p>
+              <button 
+                onClick={() => queryClient.invalidateQueries(['equipes'])}
+                className="mt-3 text-sm text-red-700 hover:text-red-800 underline"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -100,9 +179,9 @@ const Equipes = () => {
                   <div className="flex items-center gap-3">
                     <div 
                       className="w-10 h-10 rounded-lg flex items-center justify-center"
-                      style={{ backgroundColor: equipe.cor + '20' }}
+                      style={{ backgroundColor: (equipe.cor || '#3B82F6') + '20' }}
                     >
-                      <Users className="w-5 h-5" style={{ color: equipe.cor }} />
+                      <Users className="w-5 h-5" style={{ color: equipe.cor || '#3B82F6' }} />
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900">{equipe.nome}</h3>
@@ -113,7 +192,7 @@ const Equipes = () => {
                   </div>
                   <div 
                     className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: equipe.cor }}
+                    style={{ backgroundColor: equipe.cor || '#3B82F6' }}
                   />
                 </div>
 
@@ -132,7 +211,7 @@ const Equipes = () => {
                           key={membro.id}
                           className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full"
                         >
-                          {membro.colaborador?.nome?.split(' ')[0]}
+                          {membro.colaborador?.nome?.split(' ')[0] || 'Sem nome'}
                         </span>
                       ))}
                       {equipe.equipe_membros.length > 3 && (
