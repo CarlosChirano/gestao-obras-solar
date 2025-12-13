@@ -28,7 +28,21 @@ const EquipeForm = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('colaboradores')
-        .select('id, nome, funcao:funcoes(nome)')
+        .select('id, nome, funcao:funcoes(id, nome)')
+        .eq('ativo', true)
+        .order('nome')
+      if (error) throw error
+      return data
+    }
+  })
+
+  // Buscar funções disponíveis
+  const { data: funcoes } = useQuery({
+    queryKey: ['funcoes-ativas'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('funcoes')
+        .select('id, nome')
         .eq('ativo', true)
         .order('nome')
       if (error) throw error
@@ -67,7 +81,7 @@ const EquipeForm = () => {
           id,
           colaborador_id,
           funcao_na_equipe,
-          colaborador:colaboradores(id, nome)
+          colaborador:colaboradores(id, nome, funcao:funcoes(nome))
         `)
         .eq('equipe_id', id)
 
@@ -75,8 +89,10 @@ const EquipeForm = () => {
         setMembros(membrosData.map(m => ({
           id: m.id,
           colaborador_id: m.colaborador_id,
-          funcao_na_equipe: m.funcao_na_equipe || '',
-          colaborador_nome: m.colaborador?.nome
+          // Usa a função salva, ou a função cadastrada do colaborador
+          funcao_na_equipe: m.funcao_na_equipe || m.colaborador?.funcao?.nome || '',
+          colaborador_nome: m.colaborador?.nome,
+          funcao_cadastrada: m.colaborador?.funcao?.nome || ''
         })))
       }
 
@@ -161,6 +177,7 @@ const EquipeForm = () => {
           .from('equipes')
           .select('id, nome')
           .ilike('nome', formData.nome.trim())
+          .eq('ativo', true)
         
         if (existentes && existentes.length > 0) {
           toast.error(`Já existe uma equipe com o nome "${existentes[0].nome}". Edite a existente ou use outro nome.`)
@@ -350,13 +367,21 @@ const EquipeForm = () => {
             </div>
             <div className="flex-1">
               <label className="label">Função na Equipe</label>
-              <input
-                type="text"
+              <select
                 value={novoMembro.funcao_na_equipe}
                 onChange={(e) => setNovoMembro(prev => ({ ...prev, funcao_na_equipe: e.target.value }))}
                 className="input-field"
-                placeholder="Ex: Líder, Auxiliar..."
-              />
+              >
+                <option value="">Selecione a função...</option>
+                <option value="Líder">👑 Líder da Equipe</option>
+                <option value="Encarregado">📋 Encarregado</option>
+                <option disabled>──────────────</option>
+                {funcoes?.map((f) => (
+                  <option key={f.id} value={f.nome}>
+                    {f.nome}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="flex items-end">
               <button
@@ -391,13 +416,21 @@ const EquipeForm = () => {
                     </div>
                     <div>
                       <p className="font-medium text-gray-900">{membro.colaborador_nome}</p>
-                      <input
-                        type="text"
+                      <select
                         value={membro.funcao_na_equipe}
                         onChange={(e) => handleUpdateMembroFuncao(index, e.target.value)}
-                        className="text-sm text-gray-500 bg-transparent border-none p-0 focus:ring-0 focus:outline-none"
-                        placeholder="Função na equipe..."
-                      />
+                        className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded px-2 py-1 focus:ring-1 focus:ring-blue-500 focus:outline-none cursor-pointer"
+                      >
+                        <option value="">Selecione...</option>
+                        <option value="Líder">👑 Líder</option>
+                        <option value="Encarregado">📋 Encarregado</option>
+                        <option disabled>─────────</option>
+                        {funcoes?.map((f) => (
+                          <option key={f.id} value={f.nome}>
+                            {f.nome}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                   <button
