@@ -847,9 +847,15 @@ const OrdemServicoForm = () => {
         await supabase.from('os_servicos').insert(servicosData)
       }
 
-      // Inserir colaboradores
-      if (colaboradores.length > 0) {
-        const colaboradoresData = colaboradores.map(c => ({
+      // Inserir colaboradores - apenas os que têm colaborador_id válido
+      console.log('🔍 DEBUG - Colaboradores no estado:', colaboradores)
+      console.log('🔍 DEBUG - Total de colaboradores:', colaboradores.length)
+      
+      const colaboradoresValidos = colaboradores.filter(c => c.colaborador_id)
+      console.log('🔍 DEBUG - Colaboradores válidos (com ID):', colaboradoresValidos.length)
+      
+      if (colaboradoresValidos.length > 0) {
+        const colaboradoresData = colaboradoresValidos.map(c => ({
           ordem_servico_id: osId,
           colaborador_id: c.colaborador_id,
           funcao_id: c.funcao_id || null,
@@ -857,7 +863,22 @@ const OrdemServicoForm = () => {
           dias_trabalhados: parseFloat(c.dias_trabalhados) || 1,
           valor_total: parseFloat(c.valor_total) || 0
         }))
-        await supabase.from('os_colaboradores').insert(colaboradoresData)
+        
+        console.log('🔍 DEBUG - Dados a inserir:', JSON.stringify(colaboradoresData, null, 2))
+        
+        const { data: insertedData, error: errorColaboradores } = await supabase
+          .from('os_colaboradores')
+          .insert(colaboradoresData)
+          .select()
+        
+        if (errorColaboradores) {
+          console.error('❌ ERRO ao inserir colaboradores:', errorColaboradores)
+          toast.error('Erro ao salvar colaboradores: ' + errorColaboradores.message)
+          throw new Error('Erro ao salvar colaboradores: ' + errorColaboradores.message)
+        }
+        console.log('✅ Colaboradores salvos com sucesso:', insertedData)
+      } else {
+        console.log('⚠️ Nenhum colaborador válido para salvar')
       }
 
       // Inserir custos extras
