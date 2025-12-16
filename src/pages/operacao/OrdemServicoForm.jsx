@@ -126,14 +126,29 @@ const OrdemServicoForm = () => {
     }
   })
 
-  // Buscar equipes
+  // Buscar equipes com membros
   const { data: equipes } = useQuery({
-    queryKey: ['equipes-select'],
+    queryKey: ['equipes-com-membros'],
     queryFn: async () => {
-      const { data } = await supabase.from('equipes').select('id, nome, cor').eq('ativo', true).order('nome')
+      const { data } = await supabase
+        .from('equipes')
+        .select(`
+          id, nome, cor,
+          equipe_membros(
+            id,
+            colaborador_id,
+            funcao_na_equipe,
+            colaborador:colaboradores(id, nome, valor_diaria, funcao:funcoes(nome, valor_diaria))
+          )
+        `)
+        .eq('ativo', true)
+        .order('nome')
       return data
     }
   })
+
+  // Estado para equipes selecionadas
+  const [equipesSelecionadas, setEquipesSelecionadas] = useState([])
 
   // Buscar empresas
   const { data: empresas } = useQuery({
@@ -437,6 +452,46 @@ const OrdemServicoForm = () => {
       valor_total: 0,
       isNew: true
     }])
+  }
+
+  // Função para selecionar/desmarcar equipe
+  const handleToggleEquipe = (equipe) => {
+    const isSelected = equipesSelecionadas.includes(equipe.id)
+    
+    if (isSelected) {
+      // Remover equipe e seus membros
+      setEquipesSelecionadas(prev => prev.filter(id => id !== equipe.id))
+      
+      // Remover colaboradores que vieram dessa equipe
+      const membrosIds = equipe.equipe_membros?.map(m => m.colaborador_id) || []
+      setColaboradores(prev => prev.filter(c => !membrosIds.includes(c.colaborador_id) || !c.fromEquipe))
+    } else {
+      // Adicionar equipe
+      setEquipesSelecionadas(prev => [...prev, equipe.id])
+      
+      // Adicionar membros da equipe
+      const novosMembros = equipe.equipe_membros?.map(membro => {
+        const valorDiaria = parseFloat(membro.colaborador?.valor_diaria) || 
+                           parseFloat(membro.colaborador?.funcao?.valor_diaria) || 0
+        return {
+          colaborador_id: membro.colaborador_id,
+          funcao_id: membro.colaborador?.funcao?.id || '',
+          valor_diaria: valorDiaria,
+          dias_trabalhados: formData.previsao_dias || 1,
+          valor_total: (formData.previsao_dias || 1) * valorDiaria,
+          colaborador_nome: membro.colaborador?.nome,
+          funcao_nome: membro.funcao_na_equipe || membro.colaborador?.funcao?.nome,
+          fromEquipe: equipe.id, // Marcar de qual equipe veio
+          isNew: true
+        }
+      }) || []
+      
+      // Evitar duplicados
+      const idsExistentes = colaboradores.map(c => c.colaborador_id)
+      const membrosSemDuplicados = novosMembros.filter(m => !idsExistentes.includes(m.colaborador_id))
+      
+      setColaboradores(prev => [...prev, ...membrosSemDuplicados])
+    }
   }
 
   const updateColaborador = (index, field, value) => {
@@ -999,16 +1054,6 @@ const OrdemServicoForm = () => {
                 </div>
 
                 <div>
-                  <label className="label">Equipe</label>
-                  <select name="equipe_id" value={formData.equipe_id} onChange={handleChange} className="input-field">
-                    <option value="">Selecione...</option>
-                    {equipes?.map(e => (
-                      <option key={e.id} value={e.id}>{e.nome}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
                   <label className="label">Data de Início</label>
                   <input type="date" name="data_agendamento" value={formData.data_agendamento} onChange={handleChange} className="input-field" />
                 </div>
@@ -1169,71 +1214,126 @@ const OrdemServicoForm = () => {
 
         {/* Tab: Equipe */}
         {activeTab === 'equipe' && (
-          <div className="card">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Equipe</h2>
-              <button type="button" onClick={addColaborador} className="btn-secondary">
-                <Plus className="w-4 h-4" /> Adicionar
-              </button>
-            </div>
-
-            {colaboradores.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">Nenhum colaborador adicionado</p>
-            ) : (
-              <div className="space-y-3">
-                {colaboradores.map((colab, index) => (
-                  <div key={index} className="p-4 bg-gray-50 rounded-xl">
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
-                      <div className="md:col-span-2">
-                        <label className="label text-xs">Colaborador</label>
-                        <select
-                          value={colab.colaborador_id}
-                          onChange={(e) => updateColaborador(index, 'colaborador_id', e.target.value)}
-                          className="input-field"
-                        >
-                          <option value="">Selecione...</option>
-                          {colaboradoresDisponiveis?.map(c => (
-                            <option key={c.id} value={c.id}>{c.nome} - {c.funcao?.nome}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="label text-xs">Diária</label>
-                        <input
-                          type="number"
-                          value={colab.valor_diaria}
-                          onChange={(e) => updateColaborador(index, 'valor_diaria', e.target.value)}
-                          className="input-field"
-                          step="0.01"
+          <div className="space-y-6">
+            {/* Seleção de Equipes */}
+            <div className="card">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Selecionar Equipes</h2>
+              <p className="text-sm text-gray-500 mb-4">
+                Selecione uma ou mais equipes. Os membros serão adicionados automaticamente.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {equipes?.map(equipe => {
+                  const isSelected = equipesSelecionadas.includes(equipe.id)
+                  return (
+                    <div
+                      key={equipe.id}
+                      onClick={() => handleToggleEquipe(equipe)}
+                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        isSelected 
+                          ? 'border-blue-500 bg-blue-50' 
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="w-4 h-4 rounded-full"
+                          style={{ backgroundColor: equipe.cor || '#3B82F6' }}
                         />
-                      </div>
-                      <div>
-                        <label className="label text-xs">Dias</label>
-                        <input
-                          type="number"
-                          value={colab.dias_trabalhados}
-                          onChange={(e) => updateColaborador(index, 'dias_trabalhados', e.target.value)}
-                          className="input-field"
-                          min="0.5"
-                          step="0.5"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-blue-600">{formatCurrency(colab.valor_total)}</span>
-                        <button type="button" onClick={() => removeColaborador(index)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900">{equipe.nome}</p>
+                          <p className="text-xs text-gray-500">
+                            {equipe.equipe_membros?.length || 0} membros
+                          </p>
+                        </div>
+                        {isSelected && (
+                          <CheckCircle className="w-5 h-5 text-blue-600" />
+                        )}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
-            )}
 
-            <div className="mt-4 pt-4 border-t flex justify-end">
-              <div className="text-right">
-                <p className="text-sm text-gray-500">Total Mão de Obra</p>
-                <p className="text-2xl font-bold text-blue-600">{formatCurrency(totalMaoObra)}</p>
+              {equipes?.length === 0 && (
+                <p className="text-gray-500 text-center py-4">Nenhuma equipe cadastrada</p>
+              )}
+            </div>
+
+            {/* OU adicionar colaboradores individuais */}
+            <div className="card">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Colaboradores</h2>
+                  <p className="text-sm text-gray-500">
+                    Colaboradores das equipes selecionadas ou adicionados manualmente
+                  </p>
+                </div>
+                <button type="button" onClick={addColaborador} className="btn-secondary">
+                  <Plus className="w-4 h-4" /> Adicionar Individual
+                </button>
+              </div>
+
+              {colaboradores.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">
+                  Selecione uma equipe acima ou adicione colaboradores manualmente
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {colaboradores.map((colab, index) => (
+                    <div key={index} className="p-4 bg-gray-50 rounded-xl">
+                      <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
+                        <div className="md:col-span-2">
+                          <label className="label text-xs">Colaborador</label>
+                          <select
+                            value={colab.colaborador_id}
+                            onChange={(e) => updateColaborador(index, 'colaborador_id', e.target.value)}
+                            className="input-field"
+                          >
+                            <option value="">Selecione...</option>
+                            {colaboradoresDisponiveis?.map(c => (
+                              <option key={c.id} value={c.id}>{c.nome} - {c.funcao?.nome}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="label text-xs">Diária</label>
+                          <input
+                            type="number"
+                            value={colab.valor_diaria}
+                            onChange={(e) => updateColaborador(index, 'valor_diaria', e.target.value)}
+                            className="input-field"
+                            step="0.01"
+                          />
+                        </div>
+                        <div>
+                          <label className="label text-xs">Dias</label>
+                          <input
+                            type="number"
+                            value={colab.dias_trabalhados}
+                            onChange={(e) => updateColaborador(index, 'dias_trabalhados', e.target.value)}
+                            className="input-field"
+                            min="0.5"
+                            step="0.5"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-blue-600">{formatCurrency(colab.valor_total)}</span>
+                          <button type="button" onClick={() => removeColaborador(index)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-4 pt-4 border-t flex justify-end">
+                <div className="text-right">
+                  <p className="text-sm text-gray-500">Total Mão de Obra</p>
+                  <p className="text-2xl font-bold text-blue-600">{formatCurrency(totalMaoObra)}</p>
+                </div>
               </div>
             </div>
           </div>

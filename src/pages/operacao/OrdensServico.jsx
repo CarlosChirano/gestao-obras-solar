@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
-import { Plus, Search, Filter, Loader2, ClipboardList, Calendar, MapPin, Users, Eye, ChevronDown } from 'lucide-react'
+import { Plus, Search, Filter, Loader2, ClipboardList, Calendar, MapPin, Users, Eye, ChevronDown, DollarSign, Car } from 'lucide-react'
 
 const OrdensServico = () => {
   const [search, setSearch] = useState('')
@@ -18,7 +18,14 @@ const OrdensServico = () => {
           *,
           cliente:clientes(id, nome),
           equipe:equipes(id, nome, cor),
-          veiculo:veiculos(id, placa, modelo)
+          veiculo:veiculos(id, placa, modelo, valor_aluguel_dia, valor_gasolina_dia),
+          os_colaboradores(
+            id,
+            valor_diaria,
+            dias_trabalhados,
+            valor_total,
+            colaborador:colaboradores(nome)
+          )
         `)
         .eq('ativo', true)
         .order('data_agendamento', { ascending: false })
@@ -34,7 +41,7 @@ const OrdensServico = () => {
   })
 
   const filtered = ordens?.filter(os =>
-    os.numero?.toLowerCase().includes(search.toLowerCase()) ||
+    os.numero_os?.toLowerCase().includes(search.toLowerCase()) ||
     os.cliente?.nome?.toLowerCase().includes(search.toLowerCase()) ||
     os.endereco?.toLowerCase().includes(search.toLowerCase()) ||
     os.cidade?.toLowerCase().includes(search.toLowerCase())
@@ -65,7 +72,8 @@ const OrdensServico = () => {
 
   const formatDate = (date) => {
     if (!date) return '-'
-    return new Date(date).toLocaleDateString('pt-BR')
+    const dateStr = date.includes('T') ? date : `${date}T12:00:00`
+    return new Date(dateStr).toLocaleDateString('pt-BR')
   }
 
   const formatCurrency = (value) => {
@@ -73,6 +81,25 @@ const OrdensServico = () => {
       style: 'currency',
       currency: 'BRL'
     }).format(value || 0)
+  }
+
+  // Calcular custos da OS
+  const calcularCustos = (os) => {
+    // Custo de mão de obra (colaboradores)
+    const custoMaoObra = os.os_colaboradores?.reduce((sum, c) => {
+      return sum + (parseFloat(c.valor_total) || 0)
+    }, 0) || 0
+
+    // Custo do veículo
+    const diasVeiculo = os.previsao_dias || 1
+    const custoVeiculo = os.veiculo 
+      ? ((parseFloat(os.veiculo.valor_aluguel_dia) || 0) + (parseFloat(os.veiculo.valor_gasolina_dia) || 0)) * diasVeiculo
+      : 0
+
+    // Custo total
+    const custoTotal = custoMaoObra + custoVeiculo
+
+    return { custoMaoObra, custoVeiculo, custoTotal }
   }
 
   // Contadores por status
@@ -107,10 +134,10 @@ const OrdensServico = () => {
           <button
             key={item.status}
             onClick={() => setStatusFilter(item.status)}
-            className={`p-3 rounded-lg border transition-all text-left ${
+            className={`p-3 rounded-xl border-2 transition-all ${
               statusFilter === item.status
                 ? 'border-blue-500 bg-blue-50'
-                : 'border-gray-200 bg-white hover:border-gray-300'
+                : 'border-gray-200 hover:border-gray-300'
             }`}
           >
             <p className="text-2xl font-bold text-gray-900">{item.count}</p>
@@ -120,8 +147,8 @@ const OrdensServico = () => {
       </div>
 
       {/* Busca e Filtros */}
-      <div className="card">
-        <div className="flex flex-col sm:flex-row gap-3">
+      <div className="space-y-3">
+        <div className="flex gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -132,34 +159,36 @@ const OrdensServico = () => {
               className="input-field pl-10"
             />
           </div>
-          <button 
+          <button
             onClick={() => setShowFilters(!showFilters)}
-            className="btn-secondary"
+            className={`btn-secondary ${showFilters ? 'bg-gray-100' : ''}`}
           >
-            <Filter className="w-4 h-4" />
+            <Filter className="w-5 h-5" />
             Filtros
             <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
           </button>
         </div>
 
         {showFilters && (
-          <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="label">Status</label>
-              <select 
-                value={statusFilter} 
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="input-field"
-              >
-                <option value="">Todos</option>
-                <option value="agendada">Agendada</option>
-                <option value="confirmada">Confirmada</option>
-                <option value="em_execucao">Em Execução</option>
-                <option value="pausada">Pausada</option>
-                <option value="concluida">Concluída</option>
-                <option value="cancelada">Cancelada</option>
-                <option value="com_pendencia">Com Pendência</option>
-              </select>
+          <div className="p-4 bg-gray-50 rounded-xl">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="label">Status</label>
+                <select 
+                  value={statusFilter} 
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="input-field"
+                >
+                  <option value="">Todos</option>
+                  <option value="agendada">Agendada</option>
+                  <option value="confirmada">Confirmada</option>
+                  <option value="em_execucao">Em Execução</option>
+                  <option value="pausada">Pausada</option>
+                  <option value="concluida">Concluída</option>
+                  <option value="cancelada">Cancelada</option>
+                  <option value="com_pendencia">Com Pendência</option>
+                </select>
+              </div>
             </div>
           </div>
         )}
@@ -184,6 +213,7 @@ const OrdensServico = () => {
             {filtered?.map((os) => {
               const statusConfig = getStatusConfig(os.status)
               const prioridadeConfig = getPrioridadeConfig(os.prioridade)
+              const custos = calcularCustos(os)
               
               return (
                 <div 
@@ -195,7 +225,7 @@ const OrdensServico = () => {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <span className="font-mono font-bold text-gray-900">
-                          #{os.numero || os.id.slice(0, 8)}
+                          #{os.numero_os || os.id.slice(0, 8)}
                         </span>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}>
                           {statusConfig.label}
@@ -215,6 +245,9 @@ const OrdensServico = () => {
                         <div className="flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
                           {formatDate(os.data_agendamento)}
+                          {os.previsao_dias > 1 && (
+                            <span className="text-xs text-gray-500">({os.previsao_dias} dias)</span>
+                          )}
                         </div>
                         {os.cidade && (
                           <div className="flex items-center gap-1">
@@ -231,17 +264,51 @@ const OrdensServico = () => {
                             {os.equipe.nome}
                           </div>
                         )}
+                        {os.os_colaboradores?.length > 0 && (
+                          <div className="flex items-center gap-1">
+                            <Users className="w-4 h-4" />
+                            {os.os_colaboradores.length} colaborador{os.os_colaboradores.length > 1 ? 'es' : ''}
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    {/* Valor e Ações */}
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
+                    {/* Custos e Valores */}
+                    <div className="flex items-center gap-6">
+                      {/* Custos */}
+                      <div className="text-right space-y-1">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Users className="w-4 h-4 text-orange-500" />
+                          <span className="text-gray-600">Mão de Obra:</span>
+                          <span className="font-medium text-orange-600">{formatCurrency(custos.custoMaoObra)}</span>
+                        </div>
+                        {custos.custoVeiculo > 0 && (
+                          <div className="flex items-center gap-2 text-sm">
+                            <Car className="w-4 h-4 text-purple-500" />
+                            <span className="text-gray-600">Veículo:</span>
+                            <span className="font-medium text-purple-600">{formatCurrency(custos.custoVeiculo)}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 text-sm border-t pt-1">
+                          <DollarSign className="w-4 h-4 text-red-500" />
+                          <span className="text-gray-600">Custo Total:</span>
+                          <span className="font-bold text-red-600">{formatCurrency(custos.custoTotal)}</span>
+                        </div>
+                      </div>
+
+                      {/* Valor Total (Faturamento) */}
+                      <div className="text-right border-l pl-6">
                         <p className="text-xs text-gray-500">Valor Total</p>
-                        <p className="font-bold text-gray-900">
+                        <p className="font-bold text-lg text-green-600">
                           {formatCurrency(os.valor_total)}
                         </p>
+                        {os.valor_total > 0 && custos.custoTotal > 0 && (
+                          <p className={`text-xs font-medium ${os.valor_total > custos.custoTotal ? 'text-green-600' : 'text-red-600'}`}>
+                            Margem: {formatCurrency(os.valor_total - custos.custoTotal)}
+                          </p>
+                        )}
                       </div>
+
                       <Link 
                         to={`/ordens-servico/${os.id}`}
                         className="btn-secondary"
