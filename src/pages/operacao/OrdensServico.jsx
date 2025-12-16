@@ -9,23 +9,17 @@ const OrdensServico = () => {
   const [statusFilter, setStatusFilter] = useState('')
   const [showFilters, setShowFilters] = useState(false)
 
-  const { data: ordens, isLoading } = useQuery({
+  const { data: ordens, isLoading, error: queryError } = useQuery({
     queryKey: ['ordens-servico', statusFilter],
     queryFn: async () => {
+      // Buscar OS básica primeiro
       let query = supabase
         .from('ordens_servico')
         .select(`
           *,
           cliente:clientes(id, nome),
           equipe:equipes(id, nome, cor),
-          veiculo:veiculos(id, placa, modelo, valor_aluguel_dia, valor_gasolina_dia),
-          os_colaboradores(
-            id,
-            valor_diaria,
-            dias_trabalhados,
-            valor_total,
-            colaborador:colaboradores(nome)
-          )
+          veiculo:veiculos(id, placa, modelo, valor_aluguel_dia, valor_gasolina_dia)
         `)
         .eq('ativo', true)
         .order('data_agendamento', { ascending: false })
@@ -35,7 +29,34 @@ const OrdensServico = () => {
       }
 
       const { data, error } = await query
-      if (error) throw error
+      if (error) {
+        console.error('Erro ao buscar OS:', error)
+        throw error
+      }
+
+      // Buscar colaboradores de cada OS
+      if (data && data.length > 0) {
+        const osIds = data.map(os => os.id)
+        const { data: colaboradoresData } = await supabase
+          .from('os_colaboradores')
+          .select('ordem_servico_id, valor_diaria, dias_trabalhados, valor_total')
+          .in('ordem_servico_id', osIds)
+
+        // Agrupar colaboradores por OS
+        const colaboradoresPorOS = {}
+        colaboradoresData?.forEach(c => {
+          if (!colaboradoresPorOS[c.ordem_servico_id]) {
+            colaboradoresPorOS[c.ordem_servico_id] = []
+          }
+          colaboradoresPorOS[c.ordem_servico_id].push(c)
+        })
+
+        // Adicionar aos dados
+        data.forEach(os => {
+          os.os_colaboradores = colaboradoresPorOS[os.id] || []
+        })
+      }
+
       return data
     }
   })
@@ -196,7 +217,12 @@ const OrdensServico = () => {
 
       {/* Lista de OS */}
       <div className="card">
-        {isLoading ? (
+        {queryError ? (
+          <div className="text-center py-12 text-red-600">
+            <p className="font-medium">Erro ao carregar OS</p>
+            <p className="text-sm">{queryError.message}</p>
+          </div>
+        ) : isLoading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
           </div>
