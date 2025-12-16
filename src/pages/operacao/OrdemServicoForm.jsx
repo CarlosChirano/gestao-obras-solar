@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
 import { 
   ArrowLeft, Save, Loader2, Plus, Trash2, MapPin, Calendar, Users, Wrench, 
@@ -57,6 +57,7 @@ const OrdemServicoForm = () => {
   const navigate = useNavigate()
   const { id } = useParams()
   const isEditing = !!id
+  const queryClient = useQueryClient()
 
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(false)
@@ -923,6 +924,9 @@ const OrdemServicoForm = () => {
       } else {
         toast.success(isEditing ? 'OS atualizada!' : 'OS criada!')
       }
+      
+      // Invalidar cache para atualizar listagem
+      queryClient.invalidateQueries({ queryKey: ['ordens-servico'] })
       
       navigate('/ordens-servico')
 
