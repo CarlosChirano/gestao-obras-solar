@@ -186,10 +186,13 @@ const OrdemServicoForm = () => {
   const { data: veiculos } = useQuery({
     queryKey: ['veiculos-select'],
     queryFn: async () => {
-      const { data } = await supabase.from('veiculos').select('id, placa, modelo, valor_aluguel_dia, valor_gasolina_dia').eq('ativo', true).order('modelo')
+      const { data } = await supabase.from('veiculos').select('id, placa, modelo, valor_aluguel_dia, valor_gasolina_dia, valor_gelo_dia').eq('ativo', true).order('modelo')
       return data
     }
   })
+
+  // Estado para múltiplos veículos na OS
+  const [veiculosOS, setVeiculosOS] = useState([])
 
   // Buscar modelos de checklist
   const { data: checklistModelos } = useQuery({
@@ -309,6 +312,35 @@ const OrdemServicoForm = () => {
         .eq('ordem_servico_id', id)
 
       setCustosExtras(osCustos || [])
+
+      // Carregar múltiplos veículos da OS
+      const { data: osVeiculos } = await supabase
+        .from('os_veiculos')
+        .select('*, veiculo:veiculos(modelo, placa)')
+        .eq('ordem_servico_id', id)
+
+      if (osVeiculos && osVeiculos.length > 0) {
+        setVeiculosOS(osVeiculos.map(v => ({
+          ...v,
+          veiculo_info: v.veiculo ? `${v.veiculo.modelo} - ${v.veiculo.placa}` : ''
+        })))
+      } else if (os.veiculo_id) {
+        // Compatibilidade: se tem veículo antigo no campo único, adicionar à lista
+        const v = veiculos?.find(vei => vei.id === os.veiculo_id)
+        if (v) {
+          const dias = os.previsao_dias || 1
+          setVeiculosOS([{
+            veiculo_id: os.veiculo_id,
+            km_inicial: os.km_inicial || '',
+            valor_aluguel: parseFloat(v.valor_aluguel_dia) || 0,
+            valor_gasolina: parseFloat(v.valor_gasolina_dia) || 0,
+            valor_gelo: parseFloat(v.valor_gelo_dia) || 0,
+            dias: dias,
+            valor_total: ((parseFloat(v.valor_aluguel_dia) || 0) + (parseFloat(v.valor_gasolina_dia) || 0) + (parseFloat(v.valor_gelo_dia) || 0)) * dias,
+            veiculo_info: `${v.modelo} - ${v.placa}`
+          }])
+        }
+      }
 
       const { data: osChecklists } = await supabase
         .from('os_checklists')
@@ -548,6 +580,52 @@ const OrdemServicoForm = () => {
   const removeCustoExtra = (index) => {
     setCustosExtras(custosExtras.filter((_, i) => i !== index))
   }
+
+  // Funções para Múltiplos Veículos
+  const addVeiculoOS = () => {
+    setVeiculosOS([...veiculosOS, {
+      veiculo_id: '',
+      km_inicial: '',
+      km_final: '',
+      valor_aluguel: 0,
+      valor_gasolina: 0,
+      valor_gelo: 0,
+      dias: formData.previsao_dias || 1,
+      valor_total: 0,
+      isNew: true
+    }])
+  }
+
+  const updateVeiculoOS = (index, field, value) => {
+    const updated = [...veiculosOS]
+    updated[index][field] = value
+
+    if (field === 'veiculo_id' && value) {
+      const v = veiculos?.find(v => v.id === value)
+      if (v) {
+        updated[index].valor_aluguel = parseFloat(v.valor_aluguel_dia) || 0
+        updated[index].valor_gasolina = parseFloat(v.valor_gasolina_dia) || 0
+        updated[index].valor_gelo = parseFloat(v.valor_gelo_dia) || 0
+        updated[index].veiculo_info = `${v.modelo} - ${v.placa}`
+      }
+    }
+
+    // Recalcular total
+    const dias = parseInt(updated[index].dias) || 1
+    const aluguel = parseFloat(updated[index].valor_aluguel) || 0
+    const gasolina = parseFloat(updated[index].valor_gasolina) || 0
+    const gelo = parseFloat(updated[index].valor_gelo) || 0
+    updated[index].valor_total = (aluguel + gasolina + gelo) * dias
+
+    setVeiculosOS(updated)
+  }
+
+  const removeVeiculoOS = (index) => {
+    setVeiculosOS(veiculosOS.filter((_, i) => i !== index))
+  }
+
+  // Total de veículos
+  const totalVeiculos = veiculosOS.reduce((sum, v) => sum + (parseFloat(v.valor_total) || 0), 0)
 
   // Funções para Checklists
   const addChecklist = (tipo) => {
@@ -817,6 +895,7 @@ const OrdemServicoForm = () => {
         await supabase.from('os_servicos').delete().eq('ordem_servico_id', id)
         await supabase.from('os_colaboradores').delete().eq('ordem_servico_id', id)
         await supabase.from('os_custos_extras').delete().eq('ordem_servico_id', id)
+        await supabase.from('os_veiculos').delete().eq('ordem_servico_id', id)
         await supabase.from('os_checklists').delete().eq('ordem_servico_id', id)
       } else {
         const { count } = await supabase
@@ -890,6 +969,24 @@ const OrdemServicoForm = () => {
           valor: parseFloat(c.valor) || 0
         }))
         await supabase.from('os_custos_extras').insert(custosData)
+      }
+
+      // Inserir veículos da OS
+      if (veiculosOS.length > 0) {
+        const veiculosData = veiculosOS.filter(v => v.veiculo_id).map(v => ({
+          ordem_servico_id: osId,
+          veiculo_id: v.veiculo_id,
+          km_inicial: parseFloat(v.km_inicial) || null,
+          km_final: parseFloat(v.km_final) || null,
+          valor_aluguel: parseFloat(v.valor_aluguel) || 0,
+          valor_gasolina: parseFloat(v.valor_gasolina) || 0,
+          valor_gelo: parseFloat(v.valor_gelo) || 0,
+          dias: parseInt(v.dias) || 1,
+          valor_total: parseFloat(v.valor_total) || 0
+        }))
+        if (veiculosData.length > 0) {
+          await supabase.from('os_veiculos').insert(veiculosData)
+        }
       }
 
       // Inserir checklists selecionados
@@ -1429,44 +1526,130 @@ const OrdemServicoForm = () => {
           </div>
         )}
 
-        {/* Tab: Veículo */}
+        {/* Tab: Veículos */}
         {activeTab === 'veiculo' && (
           <div className="card">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Veículo</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center justify-between mb-4">
               <div>
-                <label className="label">Veículo</label>
-                <select name="veiculo_id" value={formData.veiculo_id} onChange={handleChange} className="input-field">
-                  <option value="">Selecione...</option>
-                  {veiculos?.map(v => (
-                    <option key={v.id} value={v.id}>{v.modelo} - {v.placa}</option>
-                  ))}
-                </select>
+                <h2 className="text-lg font-semibold text-gray-900">Veículos</h2>
+                <p className="text-sm text-gray-500">Adicione os veículos utilizados na OS (pode adicionar mais de um)</p>
               </div>
-              <div>
-                <label className="label">KM Inicial</label>
-                <input type="number" name="km_inicial" value={formData.km_inicial} onChange={handleChange} className="input-field" min="0" />
-              </div>
+              <button type="button" onClick={addVeiculoOS} className="btn-secondary">
+                <Plus className="w-4 h-4" /> Adicionar Veículo
+              </button>
             </div>
 
-            {formData.veiculo_id && (
-              <div className="mt-4 p-4 bg-blue-50 rounded-xl">
-                {(() => {
-                  const v = veiculos?.find(v => v.id === formData.veiculo_id)
-                  if (!v) return null
-                  const dias = parseInt(formData.previsao_dias) || 1
-                  const custoTotal = ((parseFloat(v.valor_aluguel_dia) || 0) + (parseFloat(v.valor_gasolina_dia) || 0)) * dias
-                  return (
-                    <p className="text-sm text-blue-800">
-                      <strong>Custo total ({dias} dias):</strong> {formatCurrency(custoTotal)}
-                      <span className="text-xs block mt-1">
-                        Aluguel/dia: {formatCurrency(v.valor_aluguel_dia)} | Gasolina/dia: {formatCurrency(v.valor_gasolina_dia)}
-                      </span>
-                    </p>
-                  )
-                })()}
+            {veiculosOS.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">
+                Nenhum veículo adicionado. Clique em "Adicionar Veículo" para incluir.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {veiculosOS.map((veiculo, index) => (
+                  <div key={index} className="p-4 bg-gray-50 rounded-xl border">
+                    <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
+                      <div className="md:col-span-2">
+                        <label className="label text-xs">Veículo</label>
+                        <select
+                          value={veiculo.veiculo_id}
+                          onChange={(e) => updateVeiculoOS(index, 'veiculo_id', e.target.value)}
+                          className="input-field"
+                        >
+                          <option value="">Selecione...</option>
+                          {veiculos?.map(v => (
+                            <option key={v.id} value={v.id}>{v.modelo} - {v.placa}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="label text-xs">KM Inicial</label>
+                        <input
+                          type="number"
+                          value={veiculo.km_inicial}
+                          onChange={(e) => updateVeiculoOS(index, 'km_inicial', e.target.value)}
+                          className="input-field"
+                          min="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="label text-xs">KM Final</label>
+                        <input
+                          type="number"
+                          value={veiculo.km_final}
+                          onChange={(e) => updateVeiculoOS(index, 'km_final', e.target.value)}
+                          className="input-field"
+                          min="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="label text-xs">Dias</label>
+                        <input
+                          type="number"
+                          value={veiculo.dias}
+                          onChange={(e) => updateVeiculoOS(index, 'dias', e.target.value)}
+                          className="input-field"
+                          min="1"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-purple-600">{formatCurrency(veiculo.valor_total)}</span>
+                        <button type="button" onClick={() => removeVeiculoOS(index)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Detalhes dos custos */}
+                    {veiculo.veiculo_id && (
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="label text-xs">Aluguel/dia</label>
+                            <input
+                              type="number"
+                              value={veiculo.valor_aluguel}
+                              onChange={(e) => updateVeiculoOS(index, 'valor_aluguel', e.target.value)}
+                              className="input-field"
+                              step="0.01"
+                            />
+                          </div>
+                          <div>
+                            <label className="label text-xs">Gasolina/dia</label>
+                            <input
+                              type="number"
+                              value={veiculo.valor_gasolina}
+                              onChange={(e) => updateVeiculoOS(index, 'valor_gasolina', e.target.value)}
+                              className="input-field"
+                              step="0.01"
+                            />
+                          </div>
+                          <div>
+                            <label className="label text-xs">🧊 Gelo/dia</label>
+                            <input
+                              type="number"
+                              value={veiculo.valor_gelo}
+                              onChange={(e) => updateVeiculoOS(index, 'valor_gelo', e.target.value)}
+                              className="input-field"
+                              step="0.01"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          Total/dia: {formatCurrency((parseFloat(veiculo.valor_aluguel) || 0) + (parseFloat(veiculo.valor_gasolina) || 0) + (parseFloat(veiculo.valor_gelo) || 0))} × {veiculo.dias} dias = <strong className="text-purple-600">{formatCurrency(veiculo.valor_total)}</strong>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
+
+            <div className="mt-4 pt-4 border-t flex justify-end">
+              <div className="text-right">
+                <p className="text-sm text-gray-500">Total Veículos</p>
+                <p className="text-2xl font-bold text-purple-600">{formatCurrency(totalVeiculos)}</p>
+              </div>
+            </div>
           </div>
         )}
 

@@ -18,8 +18,7 @@ const OrdensServico = () => {
         .select(`
           *,
           cliente:clientes(id, nome),
-          equipe:equipes(id, nome, cor),
-          veiculo:veiculos(id, placa, modelo, valor_aluguel_dia, valor_gasolina_dia)
+          equipe:equipes(id, nome, cor)
         `)
         .eq('ativo', true)
         .order('data_agendamento', { ascending: false })
@@ -34,12 +33,20 @@ const OrdensServico = () => {
         throw error
       }
 
-      // Buscar colaboradores de cada OS
+      // Buscar colaboradores e veículos de cada OS
       if (data && data.length > 0) {
         const osIds = data.map(os => os.id)
+        
+        // Buscar colaboradores
         const { data: colaboradoresData } = await supabase
           .from('os_colaboradores')
           .select('ordem_servico_id, valor_diaria, dias_trabalhados, valor_total')
+          .in('ordem_servico_id', osIds)
+
+        // Buscar veículos da nova tabela
+        const { data: veiculosData } = await supabase
+          .from('os_veiculos')
+          .select('ordem_servico_id, valor_aluguel, valor_gasolina, valor_gelo, dias, valor_total')
           .in('ordem_servico_id', osIds)
 
         // Agrupar colaboradores por OS
@@ -51,9 +58,19 @@ const OrdensServico = () => {
           colaboradoresPorOS[c.ordem_servico_id].push(c)
         })
 
+        // Agrupar veículos por OS
+        const veiculosPorOS = {}
+        veiculosData?.forEach(v => {
+          if (!veiculosPorOS[v.ordem_servico_id]) {
+            veiculosPorOS[v.ordem_servico_id] = []
+          }
+          veiculosPorOS[v.ordem_servico_id].push(v)
+        })
+
         // Adicionar aos dados
         data.forEach(os => {
           os.os_colaboradores = colaboradoresPorOS[os.id] || []
+          os.os_veiculos = veiculosPorOS[os.id] || []
         })
       }
 
@@ -111,11 +128,10 @@ const OrdensServico = () => {
       return sum + (parseFloat(c.valor_total) || 0)
     }, 0) || 0
 
-    // Custo do veículo
-    const diasVeiculo = os.previsao_dias || 1
-    const custoVeiculo = os.veiculo 
-      ? ((parseFloat(os.veiculo.valor_aluguel_dia) || 0) + (parseFloat(os.veiculo.valor_gasolina_dia) || 0)) * diasVeiculo
-      : 0
+    // Custo de veículos (nova tabela os_veiculos)
+    const custoVeiculo = os.os_veiculos?.reduce((sum, v) => {
+      return sum + (parseFloat(v.valor_total) || 0)
+    }, 0) || 0
 
     // Custo total
     const custoTotal = custoMaoObra + custoVeiculo

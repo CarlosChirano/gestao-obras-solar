@@ -229,24 +229,30 @@ const Veiculos = () => {
                   )}
                 </div>
 
-                {/* Custos diários - NOVO */}
-                {(veiculo.valor_aluguel_dia > 0 || veiculo.valor_gasolina_dia > 0) && (
+                {/* Custos diários */}
+                {(veiculo.valor_aluguel_dia > 0 || veiculo.valor_gasolina_dia > 0 || veiculo.valor_gelo_dia > 0) && (
                   <div className="mt-3 pt-3 border-t border-gray-100">
                     <div className="flex items-center gap-1 text-xs text-gray-500 mb-2">
                       <DollarSign className="w-3 h-3" />
                       <span>Custos por dia:</span>
                     </div>
-                    <div className="flex gap-3">
+                    <div className="flex gap-2 flex-wrap">
                       {veiculo.valor_aluguel_dia > 0 && (
-                        <div className="flex-1 bg-blue-50 rounded-lg p-2 text-center">
+                        <div className="flex-1 min-w-[80px] bg-blue-50 rounded-lg p-2 text-center">
                           <p className="text-xs text-blue-600">Aluguel</p>
                           <p className="font-semibold text-blue-700">{formatCurrency(veiculo.valor_aluguel_dia)}</p>
                         </div>
                       )}
                       {veiculo.valor_gasolina_dia > 0 && (
-                        <div className="flex-1 bg-orange-50 rounded-lg p-2 text-center">
+                        <div className="flex-1 min-w-[80px] bg-orange-50 rounded-lg p-2 text-center">
                           <p className="text-xs text-orange-600">Gasolina</p>
                           <p className="font-semibold text-orange-700">{formatCurrency(veiculo.valor_gasolina_dia)}</p>
+                        </div>
+                      )}
+                      {veiculo.valor_gelo_dia > 0 && (
+                        <div className="flex-1 min-w-[80px] bg-cyan-50 rounded-lg p-2 text-center">
+                          <p className="text-xs text-cyan-600">🧊 Gelo</p>
+                          <p className="font-semibold text-cyan-700">{formatCurrency(veiculo.valor_gelo_dia)}</p>
                         </div>
                       )}
                     </div>
@@ -314,9 +320,10 @@ const VeiculoModal = ({ veiculo, onClose, onSave }) => {
     chassi: veiculo?.chassi || '',
     km_atual: veiculo?.km_atual || '',
     observacoes: veiculo?.observacoes || '',
-    // NOVOS CAMPOS DE CUSTOS
+    // CAMPOS DE CUSTOS DIÁRIOS
     valor_aluguel_dia: formatMoneyFromDB(veiculo?.valor_aluguel_dia),
-    valor_gasolina_dia: formatMoneyFromDB(veiculo?.valor_gasolina_dia)
+    valor_gasolina_dia: formatMoneyFromDB(veiculo?.valor_gasolina_dia),
+    valor_gelo_dia: formatMoneyFromDB(veiculo?.valor_gelo_dia)
   })
 
   const handleMoneyChange = (field) => (e) => {
@@ -339,9 +346,10 @@ const VeiculoModal = ({ veiculo, onClose, onSave }) => {
         ...formData,
         ano: formData.ano ? parseInt(formData.ano) : null,
         km_atual: formData.km_atual ? parseInt(formData.km_atual) : null,
-        // SALVAR NOVOS CAMPOS DE CUSTOS
+        // SALVAR CAMPOS DE CUSTOS
         valor_aluguel_dia: parseMoney(formData.valor_aluguel_dia) || 0,
-        valor_gasolina_dia: parseMoney(formData.valor_gasolina_dia) || 0
+        valor_gasolina_dia: parseMoney(formData.valor_gasolina_dia) || 0,
+        valor_gelo_dia: parseMoney(formData.valor_gelo_dia) || 0
       }
 
       if (veiculo) {
@@ -367,7 +375,7 @@ const VeiculoModal = ({ veiculo, onClose, onSave }) => {
   }
 
   // Calcular custo total por dia
-  const custoTotalDia = (parseMoney(formData.valor_aluguel_dia) || 0) + (parseMoney(formData.valor_gasolina_dia) || 0)
+  const custoTotalDia = (parseMoney(formData.valor_aluguel_dia) || 0) + (parseMoney(formData.valor_gasolina_dia) || 0) + (parseMoney(formData.valor_gelo_dia) || 0)
 
   return (
     <div className="modal-overlay">
@@ -510,13 +518,13 @@ const VeiculoModal = ({ veiculo, onClose, onSave }) => {
               </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="p-4 border border-gray-200 rounded-xl hover:border-blue-300 transition-colors">
                 <div className="flex items-center gap-2 mb-2">
                   <Car className="w-4 h-4 text-blue-600" />
                   <label className="font-medium text-gray-900">Aluguel por Dia</label>
                 </div>
-                <p className="text-xs text-gray-500 mb-2">Valor pago ao proprietário por dia de uso</p>
+                <p className="text-xs text-gray-500 mb-2">Valor pago ao proprietário</p>
                 <input
                   type="text"
                   value={formData.valor_aluguel_dia}
@@ -531,11 +539,26 @@ const VeiculoModal = ({ veiculo, onClose, onSave }) => {
                   <Fuel className="w-4 h-4 text-orange-600" />
                   <label className="font-medium text-gray-900">Gasolina por Dia</label>
                 </div>
-                <p className="text-xs text-gray-500 mb-2">Valor padrão de combustível por dia</p>
+                <p className="text-xs text-gray-500 mb-2">Valor padrão de combustível</p>
                 <input
                   type="text"
                   value={formData.valor_gasolina_dia}
                   onChange={handleMoneyChange('valor_gasolina_dia')}
+                  className="input-field text-lg"
+                  placeholder="R$ 0,00"
+                />
+              </div>
+
+              <div className="p-4 border border-gray-200 rounded-xl hover:border-cyan-300 transition-colors">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">🧊</span>
+                  <label className="font-medium text-gray-900">Gelo por Dia</label>
+                </div>
+                <p className="text-xs text-gray-500 mb-2">Custo diário de gelo</p>
+                <input
+                  type="text"
+                  value={formData.valor_gelo_dia}
+                  onChange={handleMoneyChange('valor_gelo_dia')}
                   className="input-field text-lg"
                   placeholder="R$ 0,00"
                 />
