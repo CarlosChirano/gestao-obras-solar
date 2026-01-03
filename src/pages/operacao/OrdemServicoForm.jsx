@@ -6,7 +6,7 @@ import {
   ArrowLeft, Save, Loader2, Plus, Trash2, MapPin, Calendar, Users, Wrench, 
   DollarSign, Car, FileText, Image, Video, Upload, Eye, X, Navigation, 
   Crosshair, ClipboardCheck, CalendarDays, CheckCircle, AlertTriangle,
-  Receipt, TrendingUp, TrendingDown
+  Receipt, TrendingUp, TrendingDown, Sun
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DiarioObra from './DiarioObra'
@@ -92,7 +92,12 @@ const OrdemServicoForm = () => {
     observacoes: '',
     observacoes_internas: '',
     veiculo_id: '',
-    km_inicial: ''
+    km_inicial: '',
+    // Campos Energia Solar
+    quantidade_placas: '',
+    tipo_telhado: '',
+    potencia_kwp: '',
+    tipo_servico_solar: ''
   })
 
   // Serviços da OS
@@ -263,7 +268,12 @@ const OrdemServicoForm = () => {
         observacoes: os.observacoes || '',
         observacoes_internas: os.observacoes_internas || '',
         veiculo_id: os.veiculo_id || '',
-        km_inicial: os.km_inicial || ''
+        km_inicial: os.km_inicial || '',
+        // Campos Energia Solar
+        quantidade_placas: os.quantidade_placas || '',
+        tipo_telhado: os.tipo_telhado || '',
+        potencia_kwp: os.potencia_kwp || '',
+        tipo_servico_solar: os.tipo_servico_solar || ''
       })
 
       if (os.cliente_id) {
@@ -880,7 +890,12 @@ const OrdemServicoForm = () => {
         observacoes: formData.observacoes,
         observacoes_internas: formData.observacoes_internas,
         veiculo_id: formData.veiculo_id || null,
-        km_inicial: formData.km_inicial ? parseFloat(formData.km_inicial) : null
+        km_inicial: formData.km_inicial ? parseFloat(formData.km_inicial) : null,
+        // Campos Energia Solar
+        quantidade_placas: formData.quantidade_placas ? parseInt(formData.quantidade_placas) : null,
+        tipo_telhado: formData.tipo_telhado || null,
+        potencia_kwp: formData.potencia_kwp ? parseFloat(formData.potencia_kwp) : null,
+        tipo_servico_solar: formData.tipo_servico_solar || null
       }
 
       let osId = id
@@ -1210,6 +1225,86 @@ const OrdemServicoForm = () => {
                     <option value="normal">Normal</option>
                     <option value="alta">Alta</option>
                     <option value="urgente">Urgente</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Card: Dados Energia Solar */}
+            <div className="card">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
+                  <Sun className="w-4 h-4 text-yellow-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Dados Energia Solar</h2>
+                  <p className="text-xs text-gray-500">Informações para análise de custos por placa/telhado</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="label">Tipo de Serviço Solar</label>
+                  <select 
+                    name="tipo_servico_solar" 
+                    value={formData.tipo_servico_solar} 
+                    onChange={handleChange} 
+                    className="input-field"
+                  >
+                    <option value="">Selecione...</option>
+                    <option value="instalacao">Instalação</option>
+                    <option value="manutencao">Manutenção</option>
+                    <option value="limpeza">Limpeza</option>
+                    <option value="vistoria">Vistoria</option>
+                    <option value="reparo">Reparo</option>
+                    <option value="ampliacao">Ampliação</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="label">Quantidade de Placas</label>
+                  <input 
+                    type="number" 
+                    name="quantidade_placas" 
+                    value={formData.quantidade_placas} 
+                    onChange={handleChange} 
+                    className="input-field" 
+                    placeholder="Ex: 12"
+                    min="0"
+                  />
+                </div>
+
+                <div>
+                  <label className="label">Potência (kWp)</label>
+                  <input 
+                    type="number" 
+                    name="potencia_kwp" 
+                    value={formData.potencia_kwp} 
+                    onChange={handleChange} 
+                    className="input-field" 
+                    placeholder="Ex: 6.5"
+                    step="0.1"
+                    min="0"
+                  />
+                </div>
+
+                <div>
+                  <label className="label">Tipo de Telhado</label>
+                  <select 
+                    name="tipo_telhado" 
+                    value={formData.tipo_telhado} 
+                    onChange={handleChange} 
+                    className="input-field"
+                  >
+                    <option value="">Selecione...</option>
+                    <option value="Cerâmica">Cerâmica</option>
+                    <option value="Metálico">Metálico</option>
+                    <option value="Fibrocimento">Fibrocimento</option>
+                    <option value="Laje">Laje</option>
+                    <option value="Solo">Solo (Usina)</option>
+                    <option value="Madeira">Madeira</option>
+                    <option value="Shingle">Shingle</option>
+                    <option value="Outro">Outro</option>
                   </select>
                 </div>
               </div>
