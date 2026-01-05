@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Gerador de Ícones PWA</title>
+  <style>
+    body { font-family: Arial; padding: 40px; text-align: center; background: #f5f5f5; }
+    .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+    h1 { color: #2563eb; }
+    canvas { border: 1px solid #ddd; border-radius: 16px; margin: 10px; }
+    button { background: #2563eb; color: white; border: none; padding: 15px 30px; border-radius: 8px; font-size: 16px; cursor: pointer; margin: 10px; }
+    button:hover { background: #1d4ed8; }
+    .instructions { text-align: left; background: #f0f9ff; padding: 20px; border-radius: 8px; margin-top: 20px; }
+    .instructions li { margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌞 Gerador de Ícones</h1>
+    <p>Clique nos botões para baixar os ícones do app</p>
+    
+    <div>
+      <canvas id="canvas512" width="512" height="512"></canvas>
+      <canvas id="canvas192" width="192" height="192"></canvas>
+    </div>
+    
+    <div>
+      <button onclick="downloadIcon(512)">⬇️ Baixar icon-512.png</button>
+      <button onclick="downloadIcon(192)">⬇️ Baixar icon-192.png</button>
+    </div>
+    
+    <div class="instructions">
+      <h3>📋 Depois de baixar:</h3>
+      <ol>
+        <li>Coloque os 2 arquivos na pasta <code>public/</code> do seu projeto</li>
+        <li>Faça o deploy</li>
+        <li>Instale no celular!</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    function drawIcon(ctx, size) {
+      const scale = size / 512;
+      
+      // Fundo azul com bordas arredondadas
+      ctx.fillStyle = '#2563eb';
+      roundRect(ctx, 0, 0, size, size, 100 * scale);
+      ctx.fill();
+      
+      // Sol (círculo amarelo)
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.arc(size/2, size/2, 100 * scale, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Raios do sol
+      const rayLength = 60 * scale;
+      const rayWidth = 32 * scale;
+      const centerX = size / 2;
+      const centerY = size / 2;
+      const distance = 156 * scale;
+      
+      // Raios nas 4 direções principais
+      ctx.fillStyle = '#facc15';
+      
+      // Cima
+      roundRect(ctx, centerX - rayWidth/2, 80 * scale, rayWidth, rayLength, rayWidth/2);
+      ctx.fill();
+      
+      // Baixo
+      roundRect(ctx, centerX - rayWidth/2, size - 80 * scale - rayLength, rayWidth, rayLength, rayWidth/2);
+      ctx.fill();
+      
+      // Esquerda
+      roundRect(ctx, 80 * scale, centerY - rayWidth/2, rayLength, rayWidth, rayWidth/2);
+      ctx.fill();
+      
+      // Direita
+      roundRect(ctx, size - 80 * scale - rayLength, centerY - rayWidth/2, rayLength, rayWidth, rayWidth/2);
+      ctx.fill();
+    }
+    
+    function roundRect(ctx, x, y, width, height, radius) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    }
+    
+    function downloadIcon(size) {
+      const canvas = document.getElementById('canvas' + size);
+      const link = document.createElement('a');
+      link.download = 'icon-' + size + '.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+    
+    // Desenhar os ícones quando a página carregar
+    window.onload = function() {
+      const ctx512 = document.getElementById('canvas512').getContext('2d');
+      const ctx192 = document.getElementById('canvas192').getContext('2d');
+      
+      drawIcon(ctx512, 512);
+      drawIcon(ctx192, 192);
+    }
+  </script>
+</body>
+</html>
