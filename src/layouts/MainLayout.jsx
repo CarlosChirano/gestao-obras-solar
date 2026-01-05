@@ -22,7 +22,8 @@ import {
   DollarSign,
   ShieldCheck,
   PauseCircle,
-  FolderTree
+  FolderTree,
+  MapPin
 } from 'lucide-react'
 
 const MainLayout = ({ children }) => {
@@ -53,6 +54,11 @@ const MainLayout = ({ children }) => {
       label: 'Calendário', 
       icon: Calendar, 
       path: '/calendario' 
+    },
+    { 
+      label: 'Check-ins', 
+      icon: MapPin, 
+      path: '/checkins' 
     },
     { 
       label: 'Relatórios', 

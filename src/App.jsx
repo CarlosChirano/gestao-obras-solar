@@ -20,6 +20,11 @@ import OrdemServicoForm from './pages/operacao/OrdemServicoForm'
 import OrdemServicoDetalhes from './pages/operacao/OrdemServicoDetalhes'
 import Calendario from './pages/operacao/Calendario'
 import Relatorios from './pages/operacao/Relatorios'
+import DashboardCheckins from './pages/operacao/DashboardCheckins'
+
+// Área do Colaborador (Mobile)
+import ColaboradorLogin from './pages/colaborador/ColaboradorLogin'
+import MinhasOS from './pages/colaborador/MinhasOS'
 
 // Cadastros
 import Colaboradores from './pages/cadastros/Colaboradores'
@@ -111,6 +116,10 @@ function App() {
             <Route path="/redefinir-senha" element={<RedefinirSenha />} />
             <Route path="/aceitar-convite" element={<AceitarConvite />} />
 
+            {/* Rotas do Colaborador (Mobile) - Públicas sem layout */}
+            <Route path="/colaborador/login" element={<ColaboradorLogin />} />
+            <Route path="/colaborador/minhas-os" element={<MinhasOS />} />
+
             {/* Rotas Privadas */}
             <Route path="/" element={
               <PrivateRoute>
@@ -151,6 +160,13 @@ function App() {
             <Route path="/relatorios" element={
               <PrivateRoute>
                 <Relatorios />
+              </PrivateRoute>
+            } />
+
+            {/* Check-ins (Controle de Presença) */}
+            <Route path="/checkins" element={
+              <PrivateRoute>
+                <DashboardCheckins />
               </PrivateRoute>
             } />
 
