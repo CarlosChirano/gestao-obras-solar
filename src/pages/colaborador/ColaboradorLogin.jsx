@@ -21,57 +21,38 @@ const ColaboradorLogin = () => {
     setLoading(true)
 
     try {
-      // Autenticar com Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password: senha
-      })
-
-      if (authError) {
-        // Se não existe no auth, verificar se é primeiro acesso
-        const { data: usuario } = await supabase
-          .from('colaborador_usuarios')
-          .select('*, colaborador:colaboradores(nome)')
-          .eq('email', email.toLowerCase())
-          .eq('ativo', true)
-          .single()
-
-        if (usuario && usuario.primeiro_acesso) {
-          // Primeiro acesso - criar usuário no auth com senha = CPF
-          toast.error('Primeiro acesso! Use seu CPF como senha.')
-          return
-        }
-        
-        throw new Error('Email ou senha incorretos')
-      }
-
-      // Buscar dados do colaborador
-      const { data: usuario, error: userError } = await supabase
-        .from('colaborador_usuarios')
-        .select('*, colaborador:colaboradores(id, nome, foto_url)')
-        .eq('email', email.toLowerCase())
-        .eq('ativo', true)
+      // Buscar colaborador pelo email
+      const { data: colaborador, error } = await supabase
+        .from('colaboradores')
+        .select('id, nome, email, cpf, foto_url, ativo')
+        .eq('email', email.toLowerCase().trim())
         .single()
 
-      if (userError || !usuario) {
-        throw new Error('Colaborador não encontrado ou inativo')
+      if (error || !colaborador) {
+        throw new Error('Email não encontrado. Verifique com seu gestor.')
       }
 
-      // Atualizar último acesso
-      await supabase
-        .from('colaborador_usuarios')
-        .update({ ultimo_acesso: new Date().toISOString() })
-        .eq('id', usuario.id)
+      if (!colaborador.ativo) {
+        throw new Error('Colaborador inativo. Entre em contato com seu gestor.')
+      }
 
-      // Salvar no localStorage para manter sessão
+      // Verificar senha (CPF sem formatação)
+      const cpfLimpo = colaborador.cpf?.replace(/\D/g, '') || ''
+      const senhaLimpa = senha.replace(/\D/g, '')
+
+      if (cpfLimpo !== senhaLimpa) {
+        throw new Error('Senha incorreta. Use seu CPF como senha.')
+      }
+
+      // Login OK - salvar no localStorage
       localStorage.setItem('colaborador_logado', JSON.stringify({
-        id: usuario.colaborador.id,
-        nome: usuario.colaborador.nome,
-        foto_url: usuario.colaborador.foto_url,
-        email: usuario.email
+        id: colaborador.id,
+        nome: colaborador.nome,
+        email: colaborador.email,
+        foto_url: colaborador.foto_url
       }))
 
-      toast.success(`Bem-vindo, ${usuario.colaborador.nome}!`)
+      toast.success(`Bem-vindo, ${colaborador.nome}!`)
       navigate('/colaborador/minhas-os')
 
     } catch (error) {
@@ -117,6 +98,8 @@ const ColaboradorLogin = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="seu@email.com"
+                  autoCapitalize="none"
+                  autoCorrect="off"
                 />
               </div>
             </div>
@@ -130,10 +113,11 @@ const ColaboradorLogin = () => {
                   value={senha}
                   onChange={(e) => setSenha(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="••••••••"
+                  placeholder="Seu CPF (só números)"
+                  inputMode="numeric"
                 />
               </div>
-              <p className="text-xs text-gray-500 mt-1">Primeiro acesso? Use seu CPF como senha</p>
+              <p className="text-xs text-gray-500 mt-1">Use seu CPF como senha (só números)</p>
             </div>
 
             <button
