@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
-import { Plus, Search, Filter, Loader2, ClipboardList, Calendar, MapPin, Users, Eye, ChevronDown, DollarSign, Car } from 'lucide-react'
+import { Plus, Search, Filter, Loader2, ClipboardList, Calendar, MapPin, Users, Eye, ChevronDown, DollarSign, Car, Snowflake, Coffee } from 'lucide-react'
 
 const OrdensServico = () => {
   const [search, setSearch] = useState('')
@@ -46,7 +46,7 @@ const OrdensServico = () => {
         // Buscar veículos da nova tabela
         const { data: veiculosData } = await supabase
           .from('os_veiculos')
-          .select('ordem_servico_id, valor_aluguel, valor_gasolina, valor_gelo, dias, valor_total')
+          .select('ordem_servico_id, valor_aluguel, valor_gasolina, valor_gelo, valor_cafe, dias, valor_total')
           .in('ordem_servico_id', osIds)
 
         // Agrupar colaboradores por OS
@@ -128,15 +128,17 @@ const OrdensServico = () => {
       return sum + (parseFloat(c.valor_total) || 0)
     }, 0) || 0
 
-    // Custo de veículos (nova tabela os_veiculos)
-    const custoVeiculo = os.os_veiculos?.reduce((sum, v) => {
-      return sum + (parseFloat(v.valor_total) || 0)
-    }, 0) || 0
+    // Custos de veículos detalhados (nova tabela os_veiculos)
+    const custoAluguel = os.os_veiculos?.reduce((sum, v) => sum + (parseFloat(v.valor_aluguel) || 0), 0) || 0
+    const custoGasolina = os.os_veiculos?.reduce((sum, v) => sum + (parseFloat(v.valor_gasolina) || 0), 0) || 0
+    const custoGelo = os.os_veiculos?.reduce((sum, v) => sum + (parseFloat(v.valor_gelo) || 0), 0) || 0
+    const custoCafe = os.os_veiculos?.reduce((sum, v) => sum + (parseFloat(v.valor_cafe) || 0), 0) || 0
+    const custoVeiculo = custoAluguel + custoGasolina + custoGelo + custoCafe
 
     // Custo total
     const custoTotal = custoMaoObra + custoVeiculo
 
-    return { custoMaoObra, custoVeiculo, custoTotal }
+    return { custoMaoObra, custoVeiculo, custoAluguel, custoGasolina, custoGelo, custoCafe, custoTotal }
   }
 
   // Contadores por status
@@ -329,6 +331,22 @@ const OrdensServico = () => {
                             <Car className="w-4 h-4 text-purple-500" />
                             <span className="text-gray-600">Veículo:</span>
                             <span className="font-medium text-purple-600">{formatCurrency(custos.custoVeiculo)}</span>
+                          </div>
+                        )}
+                        {(custos.custoGelo > 0 || custos.custoCafe > 0) && (
+                          <div className="flex items-center gap-3 text-xs text-gray-500 pl-6">
+                            {custos.custoGelo > 0 && (
+                              <span className="flex items-center gap-1">
+                                <Snowflake className="w-3 h-3 text-cyan-500" />
+                                Gelo: {formatCurrency(custos.custoGelo)}
+                              </span>
+                            )}
+                            {custos.custoCafe > 0 && (
+                              <span className="flex items-center gap-1">
+                                <Coffee className="w-3 h-3 text-amber-600" />
+                                Café: {formatCurrency(custos.custoCafe)}
+                              </span>
+                            )}
                           </div>
                         )}
                         <div className="flex items-center gap-2 text-sm border-t pt-1">

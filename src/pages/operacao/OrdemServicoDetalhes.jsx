@@ -73,6 +73,19 @@ const OrdemServicoDetalhes = () => {
     enabled: !!id
   })
 
+  // Buscar veículos da OS (nova tabela)
+  const { data: osVeiculos } = useQuery({
+    queryKey: ['os-veiculos', id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('os_veiculos')
+        .select('*, veiculo:veiculos(placa, modelo, marca)')
+        .eq('ordem_servico_id', id)
+      return data
+    },
+    enabled: !!id
+  })
+
   const updateStatusMutation = useMutation({
     mutationFn: async (status) => {
       const updateData = { status }
@@ -145,7 +158,15 @@ const OrdemServicoDetalhes = () => {
   const totalServicos = servicos?.reduce((sum, s) => sum + (parseFloat(s.valor_total) || 0), 0) || 0
   const totalMaoObra = colaboradores?.reduce((sum, c) => sum + (parseFloat(c.valor_total) || 0), 0) || 0
   const totalCustosExtras = custosExtras?.reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0) || 0
-  const custoTotal = totalMaoObra + (parseFloat(os?.valor_materiais) || 0) + (parseFloat(os?.valor_deslocamento) || 0) + totalCustosExtras
+  
+  // Custos de veículos (da nova tabela os_veiculos)
+  const totalAluguelVeiculo = osVeiculos?.reduce((sum, v) => sum + (parseFloat(v.valor_aluguel) || 0), 0) || 0
+  const totalGasolina = osVeiculos?.reduce((sum, v) => sum + (parseFloat(v.valor_gasolina) || 0), 0) || 0
+  const totalGelo = osVeiculos?.reduce((sum, v) => sum + (parseFloat(v.valor_gelo) || 0), 0) || 0
+  const totalCafe = osVeiculos?.reduce((sum, v) => sum + (parseFloat(v.valor_cafe) || 0), 0) || 0
+  const totalVeiculos = totalAluguelVeiculo + totalGasolina + totalGelo + totalCafe
+  
+  const custoTotal = totalMaoObra + (parseFloat(os?.valor_materiais) || 0) + totalVeiculos + totalCustosExtras
   const resultado = (parseFloat(os?.valor_total) || 0) - custoTotal
 
   if (isLoading) {
@@ -493,10 +514,38 @@ const OrdemServicoDetalhes = () => {
                 <span className="text-gray-500">Materiais</span>
                 <span className="text-gray-600">- {formatCurrency(os.valor_materiais)}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Deslocamento</span>
-                <span className="text-gray-600">- {formatCurrency(os.valor_deslocamento)}</span>
-              </div>
+              
+              {/* Custos de Veículos */}
+              {totalVeiculos > 0 && (
+                <>
+                  <div className="text-xs text-gray-400 uppercase mt-2">Veículos</div>
+                  {totalAluguelVeiculo > 0 && (
+                    <div className="flex justify-between text-sm pl-2">
+                      <span className="text-gray-500">Aluguel/Diária</span>
+                      <span className="text-gray-600">- {formatCurrency(totalAluguelVeiculo)}</span>
+                    </div>
+                  )}
+                  {totalGasolina > 0 && (
+                    <div className="flex justify-between text-sm pl-2">
+                      <span className="text-gray-500">Gasolina</span>
+                      <span className="text-gray-600">- {formatCurrency(totalGasolina)}</span>
+                    </div>
+                  )}
+                  {totalGelo > 0 && (
+                    <div className="flex justify-between text-sm pl-2">
+                      <span className="text-gray-500">Gelo</span>
+                      <span className="text-gray-600">- {formatCurrency(totalGelo)}</span>
+                    </div>
+                  )}
+                  {totalCafe > 0 && (
+                    <div className="flex justify-between text-sm pl-2">
+                      <span className="text-gray-500">Café da Manhã</span>
+                      <span className="text-gray-600">- {formatCurrency(totalCafe)}</span>
+                    </div>
+                  )}
+                </>
+              )}
+              
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Custos Extras</span>
                 <span className="text-gray-600">- {formatCurrency(totalCustosExtras)}</span>
@@ -573,8 +622,62 @@ const OrdemServicoDetalhes = () => {
             </div>
           )}
 
-          {/* Veículo */}
-          {os.veiculo && (
+          {/* Veículos */}
+          {osVeiculos && osVeiculos.length > 0 && (
+            <div className="card">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">Veículos</h2>
+              <div className="space-y-4">
+                {osVeiculos.map((v, idx) => (
+                  <div key={idx} className="border-b border-gray-100 pb-3 last:border-0 last:pb-0">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <Car className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">{v.veiculo?.modelo || 'Veículo'}</p>
+                        <p className="text-sm text-gray-500 font-mono">{v.veiculo?.placa}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm ml-13 pl-13">
+                      {v.valor_aluguel > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Aluguel:</span>
+                          <span className="text-gray-700">{formatCurrency(v.valor_aluguel)}</span>
+                        </div>
+                      )}
+                      {v.valor_gasolina > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Gasolina:</span>
+                          <span className="text-gray-700">{formatCurrency(v.valor_gasolina)}</span>
+                        </div>
+                      )}
+                      {v.valor_gelo > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Gelo:</span>
+                          <span className="text-gray-700">{formatCurrency(v.valor_gelo)}</span>
+                        </div>
+                      )}
+                      {v.valor_cafe > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Café:</span>
+                          <span className="text-gray-700">{formatCurrency(v.valor_cafe)}</span>
+                        </div>
+                      )}
+                    </div>
+                    {v.valor_total > 0 && (
+                      <div className="flex justify-between mt-2 pt-2 border-t border-gray-100 text-sm font-medium">
+                        <span className="text-gray-600">Total:</span>
+                        <span className="text-blue-600">{formatCurrency(v.valor_total)}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Veículo Antigo (caso ainda tenha OS com veículo no campo antigo) */}
+          {os.veiculo && (!osVeiculos || osVeiculos.length === 0) && (
             <div className="card">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Veículo</h2>
               <div className="flex items-center gap-3">
