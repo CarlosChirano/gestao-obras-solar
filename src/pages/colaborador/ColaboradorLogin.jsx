@@ -21,31 +21,40 @@ const ColaboradorLogin = () => {
     setLoading(true)
 
     try {
-      // Buscar colaborador pelo email (case insensitive)
-      const { data: colaboradores, error } = await supabase
+      const emailBusca = email.trim().toLowerCase()
+      console.log('Buscando email:', emailBusca)
+
+      // Buscar TODOS os colaboradores ativos e filtrar em JavaScript
+      const { data: todosColaboradores, error } = await supabase
         .from('colaboradores')
         .select('id, nome, email, cpf, foto_url, ativo')
-        .ilike('email', email.trim())
+        .eq('ativo', true)
 
       if (error) {
-        console.error('Erro na busca:', error)
-        throw new Error('Erro ao buscar colaborador')
+        console.error('Erro na query:', error)
+        throw new Error('Erro ao conectar com o banco de dados')
       }
 
-      // Verificar se encontrou
-      if (!colaboradores || colaboradores.length === 0) {
+      console.log('Colaboradores encontrados:', todosColaboradores?.length)
+
+      // Filtrar pelo email (case insensitive)
+      const colaborador = todosColaboradores?.find(c => 
+        c.email && c.email.toLowerCase() === emailBusca
+      )
+
+      if (!colaborador) {
+        console.log('Emails disponíveis:', todosColaboradores?.map(c => c.email))
         throw new Error('Email não encontrado. Verifique com seu gestor.')
       }
 
-      const colaborador = colaboradores[0]
-
-      if (!colaborador.ativo) {
-        throw new Error('Colaborador inativo. Entre em contato com seu gestor.')
-      }
+      console.log('Colaborador encontrado:', colaborador.nome)
 
       // Verificar senha (CPF sem formatação)
       const cpfLimpo = colaborador.cpf?.replace(/\D/g, '') || ''
       const senhaLimpa = senha.replace(/\D/g, '')
+
+      console.log('CPF cadastrado (limpo):', cpfLimpo)
+      console.log('Senha digitada (limpa):', senhaLimpa)
 
       if (cpfLimpo !== senhaLimpa) {
         throw new Error('Senha incorreta. Use seu CPF como senha (só números).')
