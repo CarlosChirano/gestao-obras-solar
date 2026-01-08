@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { 
   MapPin, Clock, Play, Square, Loader2, LogOut, User, Calendar,
   CheckCircle, AlertCircle, Navigation, Sun, ChevronRight, Timer,
-  Camera, ClipboardCheck
+  Camera, ClipboardCheck, AlertTriangle, MapPinOff
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -24,6 +24,13 @@ const calcularDistancia = (lat1, lon1, lat2, lon2) => {
     Math.sin(dLon/2) * Math.sin(dLon/2)
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
   return Math.round(R * c)
+}
+
+const formatarDistancia = (metros) => {
+  if (metros < 1000) {
+    return `${metros}m`
+  }
+  return `${(metros / 1000).toFixed(1)}km`
 }
 
 const obterLocalizacao = () => {
@@ -98,21 +105,12 @@ const MinhasOS = () => {
         `)
         .eq('colaborador_id', colaborador.id)
 
-      // Filtrar apenas OS de hoje (comparação mais robusta)
-      console.log('OS do colaborador:', osColaborador?.map(o => ({
-        id: o.ordem_servico_id,
-        data: o.ordem_servico?.data_agendamento
-      })))
-      
+      // Filtrar apenas OS de hoje
       const osHoje = osColaborador?.filter(oc => {
         if (!oc.ordem_servico?.data_agendamento) return false
-        // Pegar apenas a parte da data (YYYY-MM-DD) independente de timezone
         const dataOS = oc.ordem_servico.data_agendamento.substring(0, 10)
-        console.log('Comparando:', dataOS, '===', hoje, '?', dataOS === hoje)
         return dataOS === hoje
       }) || []
-      
-      console.log('OS de hoje filtradas:', osHoje.length)
 
       // Buscar check-ins existentes
       const osIds = osHoje.map(o => o.ordem_servico_id)
@@ -133,7 +131,7 @@ const MinhasOS = () => {
       })
     },
     enabled: !!colaborador?.id,
-    refetchInterval: 30000 // Atualizar a cada 30 segundos
+    refetchInterval: 30000
   })
 
   // Verificar se tem OS em andamento
@@ -165,31 +163,44 @@ const MinhasOS = () => {
     }
   }
 
+  // Calcular distância até a OS
+  const calcularDistanciaOS = (os) => {
+    if (!localizacao) return null
+    if (!os.latitude || !os.longitude) return null
+    
+    return calcularDistancia(
+      localizacao.latitude,
+      localizacao.longitude,
+      parseFloat(os.latitude),
+      parseFloat(os.longitude)
+    )
+  }
+
   // Verificar se pode fazer check-in
   const podeCheckin = (os) => {
     // Verificar horário mínimo (06:00)
     const agora = new Date()
     const horaAtual = agora.getHours()
-    const minutoAtual = agora.getMinutes()
     const horaMinima = parseInt(config?.horario_minimo?.split(':')[0] || '6')
     
     if (horaAtual < horaMinima) {
-      return { pode: false, motivo: `Check-in permitido a partir das ${horaMinima}:00` }
+      return { pode: false, motivo: `Check-in permitido a partir das ${horaMinima}:00`, tipo: 'horario' }
     }
 
     // Verificar se já tem OS em andamento (e não é esta)
     if (osEmAndamento && osEmAndamento.id !== os.id) {
-      return { pode: false, motivo: 'Finalize a OS atual antes de iniciar outra' }
+      return { pode: false, motivo: 'Finalize a OS atual antes de iniciar outra', tipo: 'andamento' }
     }
 
     // Verificar se tem localização
     if (!localizacao) {
-      return { pode: false, motivo: 'Clique em "Atualizar Localização"' }
+      return { pode: false, motivo: 'Clique em "Atualizar" para obter sua localização', tipo: 'localizacao' }
     }
 
     // Verificar se a OS tem coordenadas
     if (!os.latitude || !os.longitude) {
-      return { pode: true, motivo: 'Obra sem coordenadas - check-in liberado' }
+      // OS SEM coordenadas - NÃO permite check-in
+      return { pode: false, motivo: 'Obra sem coordenadas cadastradas. Contate o gestor.', tipo: 'sem_coordenadas' }
     }
 
     // Calcular distância
@@ -203,30 +214,35 @@ const MinhasOS = () => {
     const raioMax = config?.raio_maximo_metros || 200
 
     if (distancia > raioMax) {
-      return { pode: false, motivo: `Você está a ${distancia}m da obra (máximo: ${raioMax}m)` }
+      return { 
+        pode: false, 
+        motivo: `Você está a ${formatarDistancia(distancia)} da obra. Aproxime-se para fazer check-in (máx: ${raioMax}m)`, 
+        tipo: 'distancia',
+        distancia 
+      }
     }
 
-    return { pode: true, distancia }
+    return { pode: true, distancia, tipo: 'ok' }
   }
 
-  // Mutation: Fazer Check-in
+  // Mutation para Check-in
   const checkinMutation = useMutation({
     mutationFn: async (os) => {
-      const distancia = localizacao && os.latitude && os.longitude
-        ? calcularDistancia(localizacao.latitude, localizacao.longitude, parseFloat(os.latitude), parseFloat(os.longitude))
-        : null
+      const status = podeCheckin(os)
+      if (!status.pode) {
+        throw new Error(status.motivo)
+      }
 
       const { data, error } = await supabase
         .from('os_checkins')
-        .insert([{
+        .insert({
           ordem_servico_id: os.id,
           colaborador_id: colaborador.id,
           checkin_at: new Date().toISOString(),
-          checkin_latitude: localizacao?.latitude,
-          checkin_longitude: localizacao?.longitude,
-          checkin_distancia_metros: distancia,
+          checkin_latitude: localizacao.latitude,
+          checkin_longitude: localizacao.longitude,
           status: 'em_andamento'
-        }])
+        })
         .select()
         .single()
 
@@ -234,73 +250,73 @@ const MinhasOS = () => {
       return data
     },
     onSuccess: () => {
-      toast.success('Check-in realizado com sucesso!')
       queryClient.invalidateQueries(['minhas-os'])
+      toast.success('Check-in realizado com sucesso!')
     },
     onError: (error) => {
-      toast.error('Erro ao fazer check-in: ' + error.message)
+      toast.error(error.message || 'Erro ao fazer check-in')
     }
   })
 
-  // Mutation: Fazer Check-out
+  // Mutation para Check-out
   const checkoutMutation = useMutation({
     mutationFn: async (os) => {
-      const distancia = localizacao && os.latitude && os.longitude
-        ? calcularDistancia(localizacao.latitude, localizacao.longitude, parseFloat(os.latitude), parseFloat(os.longitude))
-        : null
+      const checkinTime = new Date(os.checkin.checkin_at)
+      const checkoutTime = new Date()
+      const horasTrabalhadas = (checkoutTime - checkinTime) / (1000 * 60 * 60)
+      
+      // Determinar se é meia diária ou diária completa (>= 4h = diária)
+      const tipoDiaria = horasTrabalhadas >= 4 ? 'inteira' : 'meia'
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('os_checkins')
         .update({
-          checkout_at: new Date().toISOString(),
+          checkout_at: checkoutTime.toISOString(),
           checkout_latitude: localizacao?.latitude,
           checkout_longitude: localizacao?.longitude,
-          checkout_distancia_metros: distancia
+          status: 'finalizado',
+          horas_trabalhadas: horasTrabalhadas,
+          tipo_diaria: tipoDiaria
         })
         .eq('id', os.checkin.id)
-        .select()
-        .single()
 
       if (error) throw error
-      return data
     },
-    onSuccess: (data) => {
-      const horas = data.horas_trabalhadas || 0
-      const tipo = data.tipo_diaria === 'meia' ? 'Meia diária' : 'Diária completa'
-      toast.success(`Check-out realizado! ${horas.toFixed(1)}h trabalhadas (${tipo})`)
+    onSuccess: () => {
       queryClient.invalidateQueries(['minhas-os'])
+      toast.success('Obra finalizada com sucesso!')
     },
     onError: (error) => {
-      toast.error('Erro ao fazer check-out: ' + error.message)
+      toast.error(error.message || 'Erro ao finalizar')
     }
   })
 
-  // Logout
+  const formatHora = (dateStr) => {
+    if (!dateStr) return '-'
+    return new Date(dateStr).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  }
+
   const handleLogout = () => {
     localStorage.removeItem('colaborador_logado')
     navigate('/colaborador/login')
   }
 
-  // Formatar hora
-  const formatHora = (data) => {
-    if (!data) return '-'
-    return new Date(data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  if (!colaborador) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    )
   }
 
-  if (!colaborador) return null
-
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-100 pb-20">
       {/* Header */}
-      <div className="bg-blue-600 text-white p-4 sticky top-0 z-10">
+      <div className="bg-blue-600 text-white px-4 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-              {colaborador.foto_url ? (
-                <img src={colaborador.foto_url} alt="" className="w-10 h-10 rounded-full object-cover" />
-              ) : (
-                <User className="w-5 h-5" />
-              )}
+              <User className="w-5 h-5" />
             </div>
             <div>
               <p className="font-semibold">{colaborador.nome}</p>
@@ -330,7 +346,7 @@ const MinhasOS = () => {
                 <p className="font-medium text-gray-900">Sua Localização</p>
                 <p className="text-xs text-gray-500">
                   {localizacao 
-                    ? `Precisão: ${Math.round(localizacao.accuracy)}m` 
+                    ? `GPS: ±${Math.round(localizacao.accuracy)}m de precisão` 
                     : 'Clique para atualizar'}
                 </p>
               </div>
@@ -416,16 +432,19 @@ const MinhasOS = () => {
           minhasOS?.filter(os => os.id !== osEmAndamento?.id).map(os => {
             const statusCheckin = podeCheckin(os)
             const jaFezCheckin = os.checkin?.status === 'finalizado'
+            const distanciaOS = calcularDistanciaOS(os)
+            const raioMax = config?.raio_maximo_metros || 200
+            const temCoordenadas = os.latitude && os.longitude
 
             return (
               <div key={os.id} className="bg-white rounded-xl p-4 shadow-sm">
                 {/* Info da OS */}
                 <div className="flex items-start justify-between mb-3">
-                  <div>
+                  <div className="flex-1">
                     <p className="font-semibold text-gray-900">{os.cliente?.nome}</p>
                     <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
                       <MapPin className="w-4 h-4" />
-                      <span>{os.endereco}, {os.cidade}</span>
+                      <span>{os.endereco || 'Endereço não informado'}{os.cidade ? `, ${os.cidade}` : ''}</span>
                     </div>
                   </div>
                   
@@ -444,6 +463,36 @@ const MinhasOS = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Informação de Distância */}
+                {!jaFezCheckin && localizacao && (
+                  <div className={`flex items-center gap-2 p-3 rounded-lg mb-3 ${
+                    !temCoordenadas ? 'bg-orange-50 text-orange-700' :
+                    distanciaOS <= raioMax ? 'bg-green-50 text-green-700' :
+                    'bg-red-50 text-red-700'
+                  }`}>
+                    {!temCoordenadas ? (
+                      <>
+                        <MapPinOff className="w-4 h-4 flex-shrink-0" />
+                        <span className="text-sm">Obra sem coordenadas cadastradas</span>
+                      </>
+                    ) : distanciaOS <= raioMax ? (
+                      <>
+                        <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                        <span className="text-sm">
+                          Você está a <strong>{formatarDistancia(distanciaOS)}</strong> da obra ✓
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                        <span className="text-sm">
+                          Você está a <strong>{formatarDistancia(distanciaOS)}</strong> da obra (máx: {raioMax}m)
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
 
                 {/* Se já finalizou */}
                 {jaFezCheckin && (
@@ -469,7 +518,11 @@ const MinhasOS = () => {
                 {!jaFezCheckin && !osEmAndamento && (
                   <div className="mt-3">
                     {!statusCheckin.pode ? (
-                      <div className="flex items-center gap-2 p-3 bg-yellow-50 rounded-lg text-yellow-700 text-sm">
+                      <div className={`flex items-center gap-2 p-3 rounded-lg text-sm ${
+                        statusCheckin.tipo === 'distancia' ? 'bg-red-50 text-red-700' :
+                        statusCheckin.tipo === 'sem_coordenadas' ? 'bg-orange-50 text-orange-700' :
+                        'bg-yellow-50 text-yellow-700'
+                      }`}>
                         <AlertCircle className="w-4 h-4 flex-shrink-0" />
                         <span>{statusCheckin.motivo}</span>
                       </div>
@@ -487,7 +540,7 @@ const MinhasOS = () => {
                         Iniciar Obra
                         {statusCheckin.distancia && (
                           <span className="text-green-200 text-sm">
-                            ({statusCheckin.distancia}m)
+                            ({formatarDistancia(statusCheckin.distancia)})
                           </span>
                         )}
                       </button>
