@@ -83,6 +83,7 @@ const MinhasOS = () => {
       if (!colaborador?.id) return []
 
       const hoje = new Date().toISOString().split('T')[0]
+      console.log('Data de hoje:', hoje)
 
       // Buscar OS onde o colaborador está escalado
       const { data: osColaborador } = await supabase
@@ -97,10 +98,21 @@ const MinhasOS = () => {
         `)
         .eq('colaborador_id', colaborador.id)
 
-      // Filtrar apenas OS de hoje
-      const osHoje = osColaborador?.filter(oc => 
-        oc.ordem_servico?.data_agendamento === hoje
-      ) || []
+      // Filtrar apenas OS de hoje (comparação mais robusta)
+      console.log('OS do colaborador:', osColaborador?.map(o => ({
+        id: o.ordem_servico_id,
+        data: o.ordem_servico?.data_agendamento
+      })))
+      
+      const osHoje = osColaborador?.filter(oc => {
+        if (!oc.ordem_servico?.data_agendamento) return false
+        // Pegar apenas a parte da data (YYYY-MM-DD) independente de timezone
+        const dataOS = oc.ordem_servico.data_agendamento.substring(0, 10)
+        console.log('Comparando:', dataOS, '===', hoje, '?', dataOS === hoje)
+        return dataOS === hoje
+      }) || []
+      
+      console.log('OS de hoje filtradas:', osHoje.length)
 
       // Buscar check-ins existentes
       const osIds = osHoje.map(o => o.ordem_servico_id)
