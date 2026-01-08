@@ -1,16 +1,20 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
-import { Plus, Search, Filter, Loader2, ClipboardList, Calendar, MapPin, Users, Eye, ChevronDown, DollarSign, Car, Snowflake, Coffee } from 'lucide-react'
+import { Plus, Search, Filter, Loader2, ClipboardList, Calendar, MapPin, Users, Eye, ChevronDown, DollarSign, Car, Snowflake, Coffee, Trash2, RotateCcw, X, EyeOff } from 'lucide-react'
+import toast from 'react-hot-toast'
 
 const OrdensServico = () => {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [showFilters, setShowFilters] = useState(false)
+  const [mostrarDeletados, setMostrarDeletados] = useState(false)
+  const [deleteModal, setDeleteModal] = useState({ open: false, os: null })
+  const queryClient = useQueryClient()
 
   const { data: ordens, isLoading, error: queryError } = useQuery({
-    queryKey: ['ordens-servico', statusFilter],
+    queryKey: ['ordens-servico', statusFilter, mostrarDeletados],
     queryFn: async () => {
       // Buscar OS básica primeiro
       let query = supabase
@@ -22,6 +26,11 @@ const OrdensServico = () => {
         `)
         .eq('ativo', true)
         .order('data_agendamento', { ascending: false })
+
+      // Filtrar deletados
+      if (!mostrarDeletados) {
+        query = query.or('deletado.is.null,deletado.eq.false')
+      }
 
       if (statusFilter) {
         query = query.eq('status', statusFilter)
@@ -78,6 +87,43 @@ const OrdensServico = () => {
     }
   })
 
+  // Mutation para deletar (soft delete)
+  const deleteMutation = useMutation({
+    mutationFn: async (osId) => {
+      const { error } = await supabase
+        .from('ordens_servico')
+        .update({ deletado: true })
+        .eq('id', osId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['ordens-servico'])
+      toast.success('OS removida com sucesso')
+      setDeleteModal({ open: false, os: null })
+    },
+    onError: (error) => {
+      toast.error('Erro ao remover: ' + error.message)
+    }
+  })
+
+  // Mutation para restaurar
+  const restoreMutation = useMutation({
+    mutationFn: async (osId) => {
+      const { error } = await supabase
+        .from('ordens_servico')
+        .update({ deletado: false })
+        .eq('id', osId)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['ordens-servico'])
+      toast.success('OS restaurada com sucesso')
+    },
+    onError: (error) => {
+      toast.error('Erro ao restaurar: ' + error.message)
+    }
+  })
+
   const filtered = ordens?.filter(os =>
     os.numero_os?.toLowerCase().includes(search.toLowerCase()) ||
     os.cliente?.nome?.toLowerCase().includes(search.toLowerCase()) ||
@@ -123,29 +169,29 @@ const OrdensServico = () => {
 
   // Calcular custos da OS
   const calcularCustos = (os) => {
-    // Custo de mão de obra (colaboradores)
     const custoMaoObra = os.os_colaboradores?.reduce((sum, c) => {
       return sum + (parseFloat(c.valor_total) || 0)
     }, 0) || 0
 
-    // Custos de veículos detalhados (nova tabela os_veiculos)
     const custoAluguel = os.os_veiculos?.reduce((sum, v) => sum + (parseFloat(v.valor_aluguel) || 0), 0) || 0
     const custoGasolina = os.os_veiculos?.reduce((sum, v) => sum + (parseFloat(v.valor_gasolina) || 0), 0) || 0
     const custoGelo = os.os_veiculos?.reduce((sum, v) => sum + (parseFloat(v.valor_gelo) || 0), 0) || 0
     const custoCafe = os.os_veiculos?.reduce((sum, v) => sum + (parseFloat(v.valor_cafe) || 0), 0) || 0
     const custoVeiculo = custoAluguel + custoGasolina + custoGelo + custoCafe
 
-    // Custo total
     const custoTotal = custoMaoObra + custoVeiculo
 
     return { custoMaoObra, custoVeiculo, custoAluguel, custoGasolina, custoGelo, custoCafe, custoTotal }
   }
 
-  // Contadores por status
-  const statusCounts = ordens?.reduce((acc, os) => {
+  // Contadores por status (excluindo deletados da contagem se não estiver mostrando)
+  const ordensParaContagem = mostrarDeletados ? ordens : ordens?.filter(os => !os.deletado)
+  const statusCounts = ordensParaContagem?.reduce((acc, os) => {
     acc[os.status] = (acc[os.status] || 0) + 1
     return acc
   }, {}) || {}
+
+  const totalDeletados = ordens?.filter(os => os.deletado)?.length || 0
 
   return (
     <div className="space-y-6">
@@ -162,7 +208,7 @@ const OrdensServico = () => {
       {/* Cards de Status */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         {[
-          { status: '', label: 'Todas', count: ordens?.length || 0 },
+          { status: '', label: 'Todas', count: ordensParaContagem?.length || 0 },
           { status: 'agendada', label: 'Agendadas', count: statusCounts.agendada || 0 },
           { status: 'confirmada', label: 'Confirmadas', count: statusCounts.confirmada || 0 },
           { status: 'em_execucao', label: 'Em Execução', count: statusCounts.em_execucao || 0 },
@@ -180,14 +226,14 @@ const OrdensServico = () => {
             }`}
           >
             <p className="text-2xl font-bold text-gray-900">{item.count}</p>
-            <p className="text-xs text-gray-600">{item.label}</p>
+            <p className="text-xs text-gray-500 truncate">{item.label}</p>
           </button>
         ))}
       </div>
 
       {/* Busca e Filtros */}
-      <div className="space-y-3">
-        <div className="flex gap-3">
+      <div className="card space-y-4">
+        <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
             <input
@@ -198,13 +244,29 @@ const OrdensServico = () => {
               className="input-field pl-12"
             />
           </div>
-          <button
+          <button 
             onClick={() => setShowFilters(!showFilters)}
-            className={`btn-secondary ${showFilters ? 'bg-gray-100' : ''}`}
+            className="btn-secondary"
           >
             <Filter className="w-5 h-5" />
             Filtros
             <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+          </button>
+          <button
+            onClick={() => setMostrarDeletados(!mostrarDeletados)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
+              mostrarDeletados 
+                ? 'bg-red-50 border-red-200 text-red-700' 
+                : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            {mostrarDeletados ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+            {mostrarDeletados ? 'Mostrando deletadas' : 'Ver deletadas'}
+            {totalDeletados > 0 && (
+              <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                {totalDeletados}
+              </span>
+            )}
           </button>
         </div>
 
@@ -258,17 +320,22 @@ const OrdensServico = () => {
               const statusConfig = getStatusConfig(os.status)
               const prioridadeConfig = getPrioridadeConfig(os.prioridade)
               const custos = calcularCustos(os)
+              const isDeletado = os.deletado
               
               return (
                 <div 
                   key={os.id} 
-                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                  className={`border rounded-lg p-4 transition-shadow ${
+                    isDeletado 
+                      ? 'border-red-200 bg-red-50 opacity-60' 
+                      : 'border-gray-200 hover:shadow-md'
+                  }`}
                 >
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     {/* Info Principal */}
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
-                        <span className="font-mono font-bold text-gray-900">
+                        <span className={`font-mono font-bold ${isDeletado ? 'text-red-900 line-through' : 'text-gray-900'}`}>
                           #{os.numero_os || os.id.slice(0, 8)}
                         </span>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}>
@@ -279,9 +346,14 @@ const OrdensServico = () => {
                             ● {prioridadeConfig.label}
                           </span>
                         )}
+                        {isDeletado && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs">
+                            <Trash2 className="w-3 h-3" /> Removida
+                          </span>
+                        )}
                       </div>
 
-                      <h3 className="font-medium text-gray-900 mb-1">
+                      <h3 className={`font-medium mb-1 ${isDeletado ? 'text-red-900' : 'text-gray-900'}`}>
                         {os.cliente?.nome || 'Cliente não informado'}
                       </h3>
 
@@ -369,13 +441,37 @@ const OrdensServico = () => {
                         )}
                       </div>
 
-                      <Link 
-                        to={`/ordens-servico/${os.id}`}
-                        className="btn-secondary"
-                      >
-                        <Eye className="w-4 h-4" />
-                        Ver
-                      </Link>
+                      {/* Ações */}
+                      <div className="flex items-center gap-2">
+                        {isDeletado ? (
+                          <button
+                            onClick={() => restoreMutation.mutate(os.id)}
+                            disabled={restoreMutation.isPending}
+                            className="inline-flex items-center gap-1 px-3 py-2 text-sm text-green-600 hover:bg-green-50 rounded-lg border border-green-200"
+                            title="Restaurar OS"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                            Restaurar
+                          </button>
+                        ) : (
+                          <>
+                            <Link 
+                              to={`/ordens-servico/${os.id}`}
+                              className="btn-secondary"
+                            >
+                              <Eye className="w-4 h-4" />
+                              Ver
+                            </Link>
+                            <button
+                              onClick={() => setDeleteModal({ open: true, os })}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                              title="Remover OS"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -384,6 +480,58 @@ const OrdensServico = () => {
           </div>
         )}
       </div>
+
+      {/* Modal de Confirmação de Exclusão */}
+      {deleteModal.open && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between p-6 border-b">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                  <Trash2 className="w-5 h-5 text-red-600" />
+                </div>
+                <h2 className="text-lg font-semibold text-gray-900">Remover OS</h2>
+              </div>
+              <button onClick={() => setDeleteModal({ open: false, os: null })} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-gray-600">
+                Tem certeza que deseja remover a OS <strong>#{deleteModal.os?.numero_os || deleteModal.os?.id?.slice(0, 8)}</strong>?
+              </p>
+              <p className="text-sm text-gray-500 mt-2">
+                Cliente: <strong>{deleteModal.os?.cliente?.nome}</strong>
+              </p>
+              <p className="text-sm text-gray-500 mt-3 p-3 bg-yellow-50 rounded-lg">
+                ⚠️ A OS não será excluída permanentemente e poderá ser restaurada depois.
+              </p>
+            </div>
+
+            <div className="flex gap-3 p-6 border-t bg-gray-50 rounded-b-2xl">
+              <button
+                onClick={() => setDeleteModal({ open: false, os: null })}
+                className="btn-secondary flex-1"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate(deleteModal.os?.id)}
+                disabled={deleteMutation.isPending}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {deleteMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+                Remover
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
