@@ -21,16 +21,23 @@ const ColaboradorLogin = () => {
     setLoading(true)
 
     try {
-      // Buscar colaborador pelo email
-      const { data: colaborador, error } = await supabase
+      // Buscar colaborador pelo email (case insensitive)
+      const { data: colaboradores, error } = await supabase
         .from('colaboradores')
         .select('id, nome, email, cpf, foto_url, ativo')
-        .eq('email', email.toLowerCase().trim())
-        .single()
+        .ilike('email', email.trim())
 
-      if (error || !colaborador) {
+      if (error) {
+        console.error('Erro na busca:', error)
+        throw new Error('Erro ao buscar colaborador')
+      }
+
+      // Verificar se encontrou
+      if (!colaboradores || colaboradores.length === 0) {
         throw new Error('Email não encontrado. Verifique com seu gestor.')
       }
+
+      const colaborador = colaboradores[0]
 
       if (!colaborador.ativo) {
         throw new Error('Colaborador inativo. Entre em contato com seu gestor.')
@@ -41,7 +48,7 @@ const ColaboradorLogin = () => {
       const senhaLimpa = senha.replace(/\D/g, '')
 
       if (cpfLimpo !== senhaLimpa) {
-        throw new Error('Senha incorreta. Use seu CPF como senha.')
+        throw new Error('Senha incorreta. Use seu CPF como senha (só números).')
       }
 
       // Login OK - salvar no localStorage
