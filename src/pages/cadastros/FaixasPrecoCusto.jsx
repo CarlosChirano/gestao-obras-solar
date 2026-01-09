@@ -26,8 +26,42 @@ const FaixasPrecoCusto = () => {
     kwp_min: '',
     kwp_max: '',
     valor: '',
+    valorFormatado: '',
     descricao: ''
   })
+
+  // Função para formatar valor em moeda brasileira
+  const formatarMoeda = (valor) => {
+    if (!valor) return ''
+    const numero = parseFloat(valor)
+    if (isNaN(numero)) return ''
+    return numero.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+
+  // Função para converter string formatada em número
+  const parseMoeda = (valorFormatado) => {
+    if (!valorFormatado) return ''
+    // Remove pontos de milhar e troca vírgula por ponto
+    const numero = valorFormatado.replace(/\./g, '').replace(',', '.')
+    return numero
+  }
+
+  // Handler para campo de moeda
+  const handleMoedaChange = (e) => {
+    let valor = e.target.value
+    // Remove tudo exceto números e vírgula
+    valor = valor.replace(/[^\d,]/g, '')
+    // Garante apenas uma vírgula
+    const partes = valor.split(',')
+    if (partes.length > 2) {
+      valor = partes[0] + ',' + partes.slice(1).join('')
+    }
+    // Limita casas decimais a 2
+    if (partes.length === 2 && partes[1].length > 2) {
+      valor = partes[0] + ',' + partes[1].substring(0, 2)
+    }
+    setFormData({ ...formData, valorFormatado: valor, valor: parseMoeda(valor) })
+  }
 
   // Buscar faixas
   const { data: faixas, isLoading } = useQuery({
@@ -95,6 +129,7 @@ const FaixasPrecoCusto = () => {
         kwp_min: faixa.kwp_min?.toString() || '',
         kwp_max: faixa.kwp_max?.toString() || '',
         valor: faixa.valor?.toString() || '',
+        valorFormatado: formatarMoeda(faixa.valor) || '',
         descricao: faixa.descricao || ''
       })
     } else {
@@ -103,6 +138,7 @@ const FaixasPrecoCusto = () => {
         kwp_min: '',
         kwp_max: '',
         valor: '',
+        valorFormatado: '',
         descricao: ''
       })
     }
@@ -116,6 +152,7 @@ const FaixasPrecoCusto = () => {
       kwp_min: '',
       kwp_max: '',
       valor: '',
+      valorFormatado: '',
       descricao: ''
     })
   }
@@ -343,15 +380,17 @@ const FaixasPrecoCusto = () => {
 
               <div>
                 <label className="label">Custo da Equipe (R$) *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.valor}
-                  onChange={(e) => setFormData({ ...formData, valor: e.target.value })}
-                  className="input-field"
-                  placeholder="1000.00"
-                  required
-                />
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">R$</span>
+                  <input
+                    type="text"
+                    value={formData.valorFormatado}
+                    onChange={handleMoedaChange}
+                    className="input-field pl-10"
+                    placeholder="1.000,00"
+                    required
+                  />
+                </div>
               </div>
 
               <div>

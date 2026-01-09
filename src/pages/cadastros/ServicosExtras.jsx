@@ -26,9 +26,55 @@ const ServicosExtras = () => {
     nome: '',
     descricao: '',
     valor_venda: '',
+    valor_venda_formatado: '',
     valor_custo: '',
+    valor_custo_formatado: '',
     unidade: 'unidade'
   })
+
+  // Função para formatar valor em moeda brasileira
+  const formatarMoeda = (valor) => {
+    if (!valor) return ''
+    const numero = parseFloat(valor)
+    if (isNaN(numero)) return ''
+    return numero.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+
+  // Função para converter string formatada em número
+  const parseMoeda = (valorFormatado) => {
+    if (!valorFormatado) return ''
+    // Remove pontos de milhar e troca vírgula por ponto
+    const numero = valorFormatado.replace(/\./g, '').replace(',', '.')
+    return numero
+  }
+
+  // Handler para campo de moeda - Venda
+  const handleMoedaVendaChange = (e) => {
+    let valor = e.target.value
+    valor = valor.replace(/[^\d,]/g, '')
+    const partes = valor.split(',')
+    if (partes.length > 2) {
+      valor = partes[0] + ',' + partes.slice(1).join('')
+    }
+    if (partes.length === 2 && partes[1].length > 2) {
+      valor = partes[0] + ',' + partes[1].substring(0, 2)
+    }
+    setFormData({ ...formData, valor_venda_formatado: valor, valor_venda: parseMoeda(valor) })
+  }
+
+  // Handler para campo de moeda - Custo
+  const handleMoedaCustoChange = (e) => {
+    let valor = e.target.value
+    valor = valor.replace(/[^\d,]/g, '')
+    const partes = valor.split(',')
+    if (partes.length > 2) {
+      valor = partes[0] + ',' + partes.slice(1).join('')
+    }
+    if (partes.length === 2 && partes[1].length > 2) {
+      valor = partes[0] + ',' + partes[1].substring(0, 2)
+    }
+    setFormData({ ...formData, valor_custo_formatado: valor, valor_custo: parseMoeda(valor) })
+  }
 
   // Buscar serviços
   const { data: servicos, isLoading } = useQuery({
@@ -96,7 +142,9 @@ const ServicosExtras = () => {
         nome: servico.nome || '',
         descricao: servico.descricao || '',
         valor_venda: servico.valor_venda?.toString() || '',
+        valor_venda_formatado: formatarMoeda(servico.valor_venda) || '',
         valor_custo: servico.valor_custo?.toString() || '',
+        valor_custo_formatado: formatarMoeda(servico.valor_custo) || '',
         unidade: servico.unidade || 'unidade'
       })
     } else {
@@ -105,7 +153,9 @@ const ServicosExtras = () => {
         nome: '',
         descricao: '',
         valor_venda: '',
+        valor_venda_formatado: '',
         valor_custo: '',
+        valor_custo_formatado: '',
         unidade: 'unidade'
       })
     }
@@ -119,7 +169,9 @@ const ServicosExtras = () => {
       nome: '',
       descricao: '',
       valor_venda: '',
+      valor_venda_formatado: '',
       valor_custo: '',
+      valor_custo_formatado: '',
       unidade: 'unidade'
     })
   }
@@ -380,27 +432,31 @@ const ServicosExtras = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label">Valor de Venda (R$) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formData.valor_venda}
-                    onChange={(e) => setFormData({ ...formData, valor_venda: e.target.value })}
-                    className="input-field"
-                    placeholder="350.00"
-                    required
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">R$</span>
+                    <input
+                      type="text"
+                      value={formData.valor_venda_formatado}
+                      onChange={handleMoedaVendaChange}
+                      className="input-field pl-10"
+                      placeholder="350,00"
+                      required
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="label">Custo (R$) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={formData.valor_custo}
-                    onChange={(e) => setFormData({ ...formData, valor_custo: e.target.value })}
-                    className="input-field"
-                    placeholder="245.00"
-                    required
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">R$</span>
+                    <input
+                      type="text"
+                      value={formData.valor_custo_formatado}
+                      onChange={handleMoedaCustoChange}
+                      className="input-field pl-10"
+                      placeholder="245,00"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 
