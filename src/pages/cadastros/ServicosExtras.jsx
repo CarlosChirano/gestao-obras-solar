@@ -433,12 +433,12 @@ const ServicosExtras = () => {
                 <div>
                   <label className="label">Valor de Venda (R$) *</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">R$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">R$</span>
                     <input
                       type="text"
                       value={formData.valor_venda_formatado}
                       onChange={handleMoedaVendaChange}
-                      className="input-field pl-10"
+                      className="input-field pl-12"
                       placeholder="350,00"
                       required
                     />
@@ -447,12 +447,12 @@ const ServicosExtras = () => {
                 <div>
                   <label className="label">Custo (R$) *</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">R$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">R$</span>
                     <input
                       type="text"
                       value={formData.valor_custo_formatado}
                       onChange={handleMoedaCustoChange}
-                      className="input-field pl-10"
+                      className="input-field pl-12"
                       placeholder="245,00"
                       required
                     />

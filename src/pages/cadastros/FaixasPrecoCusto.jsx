@@ -381,12 +381,12 @@ const FaixasPrecoCusto = () => {
               <div>
                 <label className="label">Custo da Equipe (R$) *</label>
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">R$</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">R$</span>
                   <input
                     type="text"
                     value={formData.valorFormatado}
                     onChange={handleMoedaChange}
-                    className="input-field pl-10"
+                    className="input-field pl-12"
                     placeholder="1.000,00"
                     required
                   />
