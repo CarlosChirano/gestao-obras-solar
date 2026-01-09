@@ -123,6 +123,9 @@ const OrdemServicoForm = () => {
   // Dados completos da OS para o DiarioObra
   const [ordemServicoCompleta, setOrdemServicoCompleta] = useState(null)
 
+  // Sugestão de preço baseado na potência
+  const [sugestaoPreco, setSugestaoPreco] = useState(null)
+
   // Buscar clientes
   const { data: clientes } = useQuery({
     queryKey: ['clientes-select'],
@@ -192,6 +195,32 @@ const OrdemServicoForm = () => {
     queryKey: ['veiculos-select'],
     queryFn: async () => {
       const { data } = await supabase.from('veiculos').select('id, placa, modelo, valor_aluguel_dia, valor_gasolina_dia, valor_gelo_dia').eq('ativo', true).order('modelo')
+      return data
+    }
+  })
+
+  // Buscar faixas de preço de venda
+  const { data: faixasVenda } = useQuery({
+    queryKey: ['faixas-preco-venda'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('faixas_preco_venda')
+        .select('*')
+        .eq('ativo', true)
+        .order('kwp_min')
+      return data
+    }
+  })
+
+  // Buscar faixas de preço de custo
+  const { data: faixasCusto } = useQuery({
+    queryKey: ['faixas-preco-custo'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('faixas_preco_custo')
+        .select('*')
+        .eq('ativo', true)
+        .order('kwp_min')
       return data
     }
   })
@@ -374,6 +403,11 @@ const OrdemServicoForm = () => {
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
+    
+    // Se mudou a potência, buscar sugestão de preço
+    if (name === 'potencia_kwp') {
+      buscarSugestaoPreco(value)
+    }
   }
 
   const handleClienteChange = async (e) => {
@@ -448,6 +482,53 @@ const OrdemServicoForm = () => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: maskMoney(value) }))
   }
+
+  // Buscar sugestão de preço baseado na potência
+  const buscarSugestaoPreco = (potencia) => {
+    if (!potencia || potencia <= 0 || !faixasVenda || !faixasCusto) {
+      setSugestaoPreco(null)
+      return
+    }
+
+    const kwp = parseFloat(potencia)
+    
+    // Buscar faixa de venda
+    const faixaVenda = faixasVenda?.find(f => kwp >= parseFloat(f.kwp_min) && kwp <= parseFloat(f.kwp_max))
+    // Buscar faixa de custo
+    const faixaCusto = faixasCusto?.find(f => kwp >= parseFloat(f.kwp_min) && kwp <= parseFloat(f.kwp_max))
+
+    if (faixaVenda || faixaCusto) {
+      const valorVenda = parseFloat(faixaVenda?.valor) || 0
+      const valorCusto = parseFloat(faixaCusto?.valor) || 0
+      setSugestaoPreco({
+        valorVenda,
+        valorCusto,
+        descricaoVenda: faixaVenda?.descricao || '',
+        descricaoCusto: faixaCusto?.descricao || '',
+        margem: valorVenda - valorCusto
+      })
+    } else {
+      setSugestaoPreco(null)
+    }
+  }
+
+  // Aplicar sugestão de preço
+  const aplicarSugestaoPreco = () => {
+    if (sugestaoPreco) {
+      setFormData(prev => ({
+        ...prev,
+        valor_total: formatMoneyFromDB(sugestaoPreco.valorVenda)
+      }))
+      toast.success('Valor de venda aplicado!')
+    }
+  }
+
+  // Atualizar sugestão quando potência muda
+  useEffect(() => {
+    if (formData.potencia_kwp && faixasVenda && faixasCusto) {
+      buscarSugestaoPreco(formData.potencia_kwp)
+    }
+  }, [formData.potencia_kwp, faixasVenda, faixasCusto])
 
   // Funções para Serviços
   const addServico = () => {
@@ -1309,6 +1390,62 @@ const OrdemServicoForm = () => {
                 </div>
               </div>
             </div>
+
+            {/* Card: Sugestão de Preço */}
+            {sugestaoPreco && (
+              <div className="card bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-200">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 text-green-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">💡 Sugestão de Preço</h2>
+                    <p className="text-xs text-gray-500">Baseado na potência de {formData.potencia_kwp} kWp</p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                  <div className="p-3 bg-white rounded-xl border">
+                    <p className="text-xs text-gray-500">Valor de Venda</p>
+                    <p className="text-xl font-bold text-green-600">{formatCurrency(sugestaoPreco.valorVenda)}</p>
+                    <p className="text-xs text-gray-400">{sugestaoPreco.descricaoVenda}</p>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border">
+                    <p className="text-xs text-gray-500">Custo Previsto</p>
+                    <p className="text-xl font-bold text-orange-600">{formatCurrency(sugestaoPreco.valorCusto)}</p>
+                    <p className="text-xs text-gray-400">{sugestaoPreco.descricaoCusto}</p>
+                  </div>
+                  <div className="p-3 bg-white rounded-xl border">
+                    <p className="text-xs text-gray-500">Margem Prevista</p>
+                    <p className="text-xl font-bold text-blue-600">{formatCurrency(sugestaoPreco.margem)}</p>
+                    <p className="text-xs text-gray-400">
+                      {sugestaoPreco.valorVenda > 0 
+                        ? `${((sugestaoPreco.margem / sugestaoPreco.valorVenda) * 100).toFixed(1)}%`
+                        : '0%'
+                      }
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={aplicarSugestaoPreco}
+                      className="btn-primary bg-green-600 hover:bg-green-700"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Aplicar Valor
+                    </button>
+                  </div>
+                </div>
+
+                {parseMoney(formData.valor_total) > 0 && parseMoney(formData.valor_total) !== sugestaoPreco.valorVenda && (
+                  <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                    <p className="text-sm text-yellow-700">
+                      <strong>Atenção:</strong> O valor atual ({formData.valor_total}) é diferente da sugestão.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="card">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Endereço da Obra</h2>
