@@ -40,6 +40,9 @@ import Veiculos from './pages/cadastros/Veiculos'
 import EmpresasContratantes from './pages/cadastros/EmpresasContratantes'
 import ChecklistModelos from './pages/cadastros/ChecklistModelos'
 import MotivosPausa from './pages/cadastros/MotivosPausa'
+import FaixasPrecoVenda from './pages/cadastros/FaixasPrecoVenda'
+import FaixasPrecoCusto from './pages/cadastros/FaixasPrecoCusto'
+import ServicosExtras from './pages/cadastros/ServicosExtras'
 
 // Financeiro
 import Financeiro from './pages/financeiro/Financeiro'
@@ -324,6 +327,27 @@ function App() {
             <Route path="/motivos-pausa" element={
               <PrivateRoute>
                 <MotivosPausa />
+              </PrivateRoute>
+            } />
+
+            {/* Faixas de Preço - Venda */}
+            <Route path="/faixas-preco-venda" element={
+              <PrivateRoute>
+                <FaixasPrecoVenda />
+              </PrivateRoute>
+            } />
+
+            {/* Faixas de Preço - Custo */}
+            <Route path="/faixas-preco-custo" element={
+              <PrivateRoute>
+                <FaixasPrecoCusto />
+              </PrivateRoute>
+            } />
+
+            {/* Serviços Extras */}
+            <Route path="/servicos-extras" element={
+              <PrivateRoute>
+                <ServicosExtras />
               </PrivateRoute>
             } />
 

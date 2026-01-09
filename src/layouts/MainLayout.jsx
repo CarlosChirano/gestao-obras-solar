@@ -23,13 +23,17 @@ import {
   ShieldCheck,
   PauseCircle,
   FolderTree,
-  MapPin
+  MapPin,
+  Wallet,
+  TrendingUp,
+  Package
 } from 'lucide-react'
 
 const MainLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [cadastrosOpen, setCadastrosOpen] = useState(true)
   const [financeiroOpen, setFinanceiroOpen] = useState(true)
+  const [precificacaoOpen, setPrecificacaoOpen] = useState(true)
   const location = useLocation()
   const navigate = useNavigate()
   const { signOut, user, userProfile } = useAuth()
@@ -70,6 +74,12 @@ const MainLayout = ({ children }) => {
   const financeiroItems = [
     { label: 'Lançamentos', icon: DollarSign, path: '/financeiro' },
     { label: 'Plano de Contas', icon: FolderTree, path: '/plano-contas' },
+  ]
+
+  const precificacaoItems = [
+    { label: 'Preço Venda (kWp)', icon: TrendingUp, path: '/faixas-preco-venda' },
+    { label: 'Custo Equipe (kWp)', icon: Wallet, path: '/faixas-preco-custo' },
+    { label: 'Serviços Extras', icon: Package, path: '/servicos-extras' },
   ]
 
   const cadastroItems = [
@@ -151,6 +161,37 @@ const MainLayout = ({ children }) => {
             {financeiroOpen && (
               <div className="mt-1 space-y-1">
                 {financeiroItems.map((item) => (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setSidebarOpen(false)}
+                    className={`flex items-center gap-3 px-3 py-2 pl-6 rounded-lg transition-colors ${
+                      isActive(item.path)
+                        ? 'bg-blue-50 text-blue-700'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    <span className="text-sm">{item.label}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Submenu Precificação */}
+          <div className="pt-4">
+            <button
+              onClick={() => setPrecificacaoOpen(!precificacaoOpen)}
+              className="flex items-center justify-between w-full px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+            >
+              <span className="font-medium text-sm text-gray-500 uppercase">Precificação</span>
+              <ChevronDown className={`w-4 h-4 transition-transform ${precificacaoOpen ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {precificacaoOpen && (
+              <div className="mt-1 space-y-1">
+                {precificacaoItems.map((item) => (
                   <Link
                     key={item.path}
                     to={item.path}
