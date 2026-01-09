@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { ArrowLeft, Save, Loader2, AlertCircle, Check, Plus, Trash2, MapPin, Edit, Navigation, Star, X, Building2, FileText } from 'lucide-react'
+import { ArrowLeft, Save, Loader2, AlertCircle, Check, Plus, Trash2, MapPin, Edit, Navigation, Star, X, Building2, FileText, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 // ============================================
@@ -144,6 +144,76 @@ const fetchAddressByCEP = async (cep) => {
 }
 
 // ============================================
+// GEOCODING REVERSO - Buscar endereço por coordenadas
+// ============================================
+
+const estadoParaSigla = {
+  'Acre': 'AC', 'Alagoas': 'AL', 'Amapá': 'AP', 'Amazonas': 'AM', 'Bahia': 'BA',
+  'Ceará': 'CE', 'Distrito Federal': 'DF', 'Espírito Santo': 'ES', 'Goiás': 'GO',
+  'Maranhão': 'MA', 'Mato Grosso': 'MT', 'Mato Grosso do Sul': 'MS', 'Minas Gerais': 'MG',
+  'Pará': 'PA', 'Paraíba': 'PB', 'Paraná': 'PR', 'Pernambuco': 'PE', 'Piauí': 'PI',
+  'Rio de Janeiro': 'RJ', 'Rio Grande do Norte': 'RN', 'Rio Grande do Sul': 'RS',
+  'Rondônia': 'RO', 'Roraima': 'RR', 'Santa Catarina': 'SC', 'São Paulo': 'SP',
+  'Sergipe': 'SE', 'Tocantins': 'TO'
+}
+
+const buscarEnderecoPorCoordenadas = async (latitude, longitude) => {
+  if (!latitude || !longitude) {
+    throw new Error('Latitude e Longitude são obrigatórios')
+  }
+
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&addressdetails=1`,
+      {
+        headers: {
+          'Accept-Language': 'pt-BR',
+          'User-Agent': 'GestaoObrasSolares/1.0'
+        }
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error('Erro ao buscar endereço')
+    }
+
+    const data = await response.json()
+
+    if (data.error) {
+      throw new Error(data.error)
+    }
+
+    const address = data.address || {}
+
+    // Converter nome do estado para sigla
+    const estadoNome = address.state || ''
+    const siglaEstado = estadoParaSigla[estadoNome] || estadoNome
+
+    // Formatar CEP se existir
+    let cepFormatado = ''
+    if (address.postcode) {
+      const cepNumeros = address.postcode.replace(/\D/g, '')
+      if (cepNumeros.length === 8) {
+        cepFormatado = `${cepNumeros.slice(0, 2)}.${cepNumeros.slice(2, 5)}-${cepNumeros.slice(5)}`
+      } else {
+        cepFormatado = address.postcode
+      }
+    }
+
+    return {
+      endereco: address.road || address.street || address.pedestrian || '',
+      bairro: address.suburb || address.neighbourhood || address.district || '',
+      cidade: address.city || address.town || address.municipality || address.village || '',
+      estado: siglaEstado,
+      cep: cepFormatado
+    }
+  } catch (error) {
+    console.error('Erro no geocoding reverso:', error)
+    throw error
+  }
+}
+
+// ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
 
@@ -178,6 +248,7 @@ const ClienteForm = () => {
   const [showEnderecoModal, setShowEnderecoModal] = useState(false)
   const [enderecoEditando, setEnderecoEditando] = useState(null)
   const [loadingCEPEndereco, setLoadingCEPEndereco] = useState(false)
+  const [loadingGeocode, setLoadingGeocode] = useState(false)
   const [enderecoForm, setEnderecoForm] = useState({
     nome: '',
     endereco: '',
@@ -429,6 +500,40 @@ const ClienteForm = () => {
       )
     } else {
       toast.error('Geolocalização não suportada')
+    }
+  }
+
+  // NOVA FUNÇÃO: Buscar endereço por coordenadas
+  const handleBuscarEnderecoPorCoordenadas = async () => {
+    if (!enderecoForm.latitude || !enderecoForm.longitude) {
+      toast.error('Preencha a Latitude e Longitude primeiro')
+      return
+    }
+
+    setLoadingGeocode(true)
+    try {
+      const endereco = await buscarEnderecoPorCoordenadas(enderecoForm.latitude, enderecoForm.longitude)
+      
+      // Montar endereço completo com número se informado
+      let enderecoCompleto = endereco.endereco
+      if (enderecoForm.numero) {
+        enderecoCompleto = `${endereco.endereco}, ${enderecoForm.numero}`
+      }
+
+      setEnderecoForm(prev => ({
+        ...prev,
+        endereco: enderecoCompleto,
+        bairro: endereco.bairro || prev.bairro,
+        cidade: endereco.cidade || prev.cidade,
+        estado: endereco.estado || prev.estado,
+        cep: endereco.cep || prev.cep
+      }))
+
+      toast.success('Endereço encontrado!')
+    } catch (error) {
+      toast.error('Erro ao buscar endereço: ' + error.message)
+    } finally {
+      setLoadingGeocode(false)
     }
   }
 
@@ -708,50 +813,45 @@ const ClienteForm = () => {
               </select>
             </div>
 
-            {/* Seletor de Tipo de Identificação */}
             <div>
-              <label className="label">Identificar por</label>
+              <label className="label">Tipo de Identificação</label>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => handleTipoIdentificacaoChange('documento')}
-                  className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                    formData.tipo_identificacao === 'documento'
-                      ? 'bg-blue-50 border-blue-500 text-blue-700'
-                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  className={`flex-1 py-2 px-4 rounded-lg border-2 text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                    formData.tipo_identificacao === 'documento' 
+                      ? 'border-blue-500 bg-blue-50 text-blue-700' 
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
                   }`}
                 >
-                  <Building2 className="w-4 h-4" />
+                  <FileText className="w-4 h-4" />
                   {formData.tipo_pessoa === 'juridica' ? 'CNPJ' : 'CPF'}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleTipoIdentificacaoChange('contrato')}
-                  className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-all flex items-center justify-center gap-2 ${
-                    formData.tipo_identificacao === 'contrato'
-                      ? 'bg-green-50 border-green-500 text-green-700'
-                      : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                  className={`flex-1 py-2 px-4 rounded-lg border-2 text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                    formData.tipo_identificacao === 'contrato' 
+                      ? 'border-blue-500 bg-blue-50 text-blue-700' 
+                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
                   }`}
                 >
-                  <FileText className="w-4 h-4" />
+                  <Building2 className="w-4 h-4" />
                   Nº Contrato
                 </button>
               </div>
             </div>
-
-            {/* Campo CPF/CNPJ - só aparece se tipo_identificacao for 'documento' */}
-            {formData.tipo_identificacao === 'documento' && (
+            
+            {formData.tipo_identificacao === 'documento' ? (
               <div>
-                <label className="label">
-                  {formData.tipo_pessoa === 'juridica' ? 'CNPJ' : 'CPF'}
-                </label>
+                <label className="label">{formData.tipo_pessoa === 'juridica' ? 'CNPJ' : 'CPF'}</label>
                 <div className="relative">
                   <input 
                     type="text" 
-                    name="cpf_cnpj" 
                     value={formData.cpf_cnpj} 
                     onChange={handleCPFCNPJChange} 
-                    className={`input-field pr-10 ${errors.cpf_cnpj ? 'border-red-500' : ''}`}
+                    className={`input-field ${errors.cpf_cnpj ? 'border-red-500 focus:ring-red-500' : ''}`}
                     placeholder={formData.tipo_pessoa === 'juridica' ? '00.000.000/0000-00' : '000.000.000-00'}
                     maxLength={formData.tipo_pessoa === 'juridica' ? 18 : 14}
                   />
@@ -765,30 +865,28 @@ const ClienteForm = () => {
                     </span>
                   )}
                 </div>
+                {errors.cpf_cnpj && (
+                  <p className="text-red-500 text-xs mt-1">
+                    {formData.tipo_pessoa === 'juridica' ? 'CNPJ' : 'CPF'} inválido
+                  </p>
+                )}
               </div>
-            )}
-
-            {/* Campo Número de Contrato - só aparece se tipo_identificacao for 'contrato' */}
-            {formData.tipo_identificacao === 'contrato' && (
+            ) : (
               <div>
                 <label className="label">Número do Contrato</label>
-                <div className="relative">
-                  <input 
-                    type="text" 
-                    name="numero_contrato" 
-                    value={formData.numero_contrato} 
-                    onChange={handleChange} 
-                    className="input-field"
-                    placeholder="Ex: CONT-2024-001"
-                  />
-                </div>
+                <input 
+                  type="text" 
+                  name="numero_contrato"
+                  value={formData.numero_contrato} 
+                  onChange={handleChange} 
+                  className="input-field"
+                  placeholder="Ex: 0000.2024"
+                />
               </div>
             )}
 
             <div>
-              <label className="label">
-                {formData.tipo_pessoa === 'juridica' ? 'Inscrição Estadual' : 'RG'}
-              </label>
+              <label className="label">{formData.tipo_pessoa === 'juridica' ? 'Inscrição Estadual' : 'RG'}</label>
               <input 
                 type="text" 
                 name="rg_ie" 
@@ -808,7 +906,6 @@ const ClienteForm = () => {
               <label className="label">Telefone</label>
               <input 
                 type="text" 
-                name="telefone" 
                 value={formData.telefone} 
                 onChange={handlePhoneChange} 
                 className="input-field" 
@@ -816,7 +913,6 @@ const ClienteForm = () => {
                 maxLength={15}
               />
             </div>
-            
             <div>
               <label className="label">E-mail</label>
               <div className="relative">
@@ -824,26 +920,23 @@ const ClienteForm = () => {
                   type="email" 
                   name="email" 
                   value={formData.email} 
-                  onChange={handleChange} 
+                  onChange={handleChange}
                   onBlur={handleEmailBlur}
-                  className={`input-field pr-10 ${errors.email ? 'border-red-500' : ''}`}
+                  className={`input-field ${errors.email ? 'border-red-500 focus:ring-red-500' : ''}`}
                   placeholder="email@exemplo.com"
                 />
-                {formData.email && (
+                {formData.email && !errors.email && (
                   <span className="absolute right-3 top-1/2 -translate-y-1/2">
-                    {errors.email ? (
-                      <AlertCircle className="w-5 h-5 text-red-500" />
-                    ) : isValidEmail(formData.email) ? (
-                      <Check className="w-5 h-5 text-green-500" />
-                    ) : null}
+                    <Check className="w-5 h-5 text-green-500" />
                   </span>
                 )}
               </div>
+              {errors.email && <p className="text-red-500 text-xs mt-1">E-mail inválido</p>}
             </div>
           </div>
         </div>
 
-        {/* Endereço Principal */}
+        {/* Endereço Principal (Sede/Residência) */}
         <div className="card">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Endereço Principal (Sede/Residência)</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -852,7 +945,6 @@ const ClienteForm = () => {
               <div className="relative">
                 <input 
                   type="text" 
-                  name="cep" 
                   value={formData.cep} 
                   onChange={handleCEPChange} 
                   className="input-field" 
@@ -860,15 +952,12 @@ const ClienteForm = () => {
                   maxLength={10}
                 />
                 {loadingCEP && (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-blue-500">
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
                   </span>
                 )}
               </div>
             </div>
-            
-            <div></div>
-            
             <div className="md:col-span-2">
               <label className="label">Endereço</label>
               <input 
@@ -879,7 +968,6 @@ const ClienteForm = () => {
                 className="input-field" 
               />
             </div>
-            
             <div>
               <label className="label">Cidade</label>
               <input 
@@ -890,7 +978,6 @@ const ClienteForm = () => {
                 className="input-field" 
               />
             </div>
-            
             <div>
               <label className="label">Estado</label>
               <select 
@@ -911,30 +998,33 @@ const ClienteForm = () => {
         {/* Endereços de Obras */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                 <Building2 className="w-5 h-5 text-blue-600" />
-                Endereços de Obras
-              </h2>
-              <p className="text-sm text-gray-500">Cadastre os locais onde serão realizados os serviços</p>
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Endereços de Obras</h2>
+                <p className="text-sm text-gray-500">Cadastre os locais onde serão realizados os serviços</p>
+              </div>
             </div>
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => openEnderecoModal()}
               className="btn-primary"
             >
-              <Plus className="w-4 h-4" /> Adicionar Obra
+              <Plus className="w-4 h-4" />
+              Adicionar Obra
             </button>
           </div>
 
           {enderecos.length === 0 ? (
-            <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-xl">
-              <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <div className="text-center py-12 bg-gray-50 rounded-xl">
+              <MapPin className="w-12 h-12 mx-auto text-gray-300 mb-4" />
               <p className="text-gray-500">Nenhum endereço de obra cadastrado</p>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => openEnderecoModal()}
-                className="text-blue-600 hover:text-blue-700 font-medium mt-2"
+                className="text-blue-600 font-medium mt-2 hover:text-blue-700"
               >
                 Adicionar primeiro endereço
               </button>
@@ -944,53 +1034,48 @@ const ClienteForm = () => {
               {enderecos.map((endereco) => (
                 <div 
                   key={endereco.id}
-                  className={`p-4 rounded-xl border-2 ${
-                    endereco.is_principal 
-                      ? 'border-yellow-400 bg-yellow-50' 
-                      : 'border-gray-200 bg-gray-50'
-                  }`}
+                  className={`p-4 border-2 rounded-xl ${endereco.is_principal ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200'}`}
                 >
                   <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-gray-900">{endereco.nome}</h3>
-                        {endereco.is_principal && (
-                          <span className="px-2 py-0.5 bg-yellow-400 text-yellow-900 text-xs font-medium rounded-full flex items-center gap-1">
-                            <Star className="w-3 h-3" /> Principal
-                          </span>
-                        )}
-                        {endereco.isTemp && (
-                          <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-medium rounded-full">
-                            Pendente
-                          </span>
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${endereco.is_principal ? 'bg-yellow-100' : 'bg-gray-100'}`}>
+                        {endereco.is_principal ? (
+                          <Star className="w-5 h-5 text-yellow-600" />
+                        ) : (
+                          <MapPin className="w-5 h-5 text-gray-500" />
                         )}
                       </div>
-                      <p className="text-sm text-gray-600">
-                        {[endereco.endereco, endereco.numero].filter(Boolean).join(', ')}
-                        {endereco.complemento ? ` - ${endereco.complemento}` : ''}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {[endereco.cidade, endereco.estado].filter(Boolean).join('/')}
-                        {endereco.cep ? ` - CEP: ${endereco.cep}` : ''}
-                      </p>
-                      {endereco.latitude && endereco.longitude && (
-                        <a
-                          href={`https://www.google.com/maps?q=${endereco.latitude},${endereco.longitude}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1 mt-1"
-                        >
-                          <Navigation className="w-3 h-3" />
-                          GPS: {endereco.latitude}, {endereco.longitude}
-                        </a>
-                      )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-gray-900">{endereco.nome}</p>
+                          {endereco.is_principal && (
+                            <span className="px-2 py-0.5 bg-yellow-200 text-yellow-800 text-xs rounded-full">
+                              Principal
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-600">
+                          {[endereco.endereco, endereco.numero].filter(Boolean).join(', ')}
+                          {endereco.bairro && ` - ${endereco.bairro}`}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {[endereco.cidade, endereco.estado].filter(Boolean).join('/')}
+                          {endereco.cep && ` - ${endereco.cep}`}
+                        </p>
+                        {(endereco.latitude && endereco.longitude) && (
+                          <p className="text-xs text-green-600 flex items-center gap-1 mt-1">
+                            <Navigation className="w-3 h-3" />
+                            GPS: {endereco.latitude}, {endereco.longitude}
+                          </p>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-1">
                       {!endereco.is_principal && (
                         <button
                           type="button"
                           onClick={() => setEnderecoPrincipal(endereco)}
-                          className="p-2 text-yellow-600 hover:bg-yellow-100 rounded-lg"
+                          className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg"
                           title="Definir como principal"
                         >
                           <Star className="w-4 h-4" />
@@ -999,7 +1084,7 @@ const ClienteForm = () => {
                       <button
                         type="button"
                         onClick={() => openEnderecoModal(endereco)}
-                        className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg"
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
                         title="Editar"
                       >
                         <Edit className="w-4 h-4" />
@@ -1007,7 +1092,7 @@ const ClienteForm = () => {
                       <button
                         type="button"
                         onClick={() => deleteEndereco(endereco)}
-                        className="p-2 text-red-600 hover:bg-red-100 rounded-lg"
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
                         title="Remover"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -1026,15 +1111,15 @@ const ClienteForm = () => {
           <textarea 
             name="observacoes" 
             value={formData.observacoes} 
-            onChange={handleChange}
-            rows={4}
-            className="input-field"
-            placeholder="Observações adicionais..."
+            onChange={handleChange} 
+            rows={4} 
+            className="input-field resize-none"
+            placeholder="Informações adicionais sobre o cliente..."
           />
         </div>
 
         {/* Botões */}
-        <div className="flex gap-3 justify-end">
+        <div className="flex justify-end gap-3">
           <button type="button" onClick={() => navigate('/clientes')} className="btn-secondary">
             Cancelar
           </button>
@@ -1045,14 +1130,20 @@ const ClienteForm = () => {
         </div>
       </form>
 
-      {/* Modal de Endereço */}
+      {/* Modal Endereço de Obra */}
       {showEnderecoModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
-            <div className="flex items-center justify-between p-8 border-b">
-              <h2 className="text-xl font-bold text-gray-900">
-                {enderecoEditando ? 'Editar Endereço' : 'Novo Endereço de Obra'}
-              </h2>
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl animate-fade-in max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <MapPin className="w-5 h-5 text-blue-600" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  {enderecoEditando ? 'Editar Endereço de Obra' : 'Novo Endereço de Obra'}
+                </h2>
+              </div>
               <button onClick={() => setShowEnderecoModal(false)} className="p-2 hover:bg-gray-100 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
@@ -1070,6 +1161,73 @@ const ClienteForm = () => {
                   className="input-field"
                   placeholder="Ex: Obra Centro, Filial Norte, Fazenda Sul..."
                 />
+              </div>
+
+              {/* Coordenadas GPS - SEÇÃO MELHORADA */}
+              <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Navigation className="w-4 h-4 text-blue-600" />
+                    <span className="font-medium text-blue-800">Coordenadas GPS</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={getMyLocation}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    Usar minha localização
+                  </button>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-600">Latitude *</label>
+                    <input
+                      type="text"
+                      name="latitude"
+                      value={enderecoForm.latitude}
+                      onChange={handleEnderecoChange}
+                      className="input-field"
+                      placeholder="-3.08673"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">Longitude *</label>
+                    <input
+                      type="text"
+                      name="longitude"
+                      value={enderecoForm.longitude}
+                      onChange={handleEnderecoChange}
+                      className="input-field"
+                      placeholder="-60.02505"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={handleBuscarEnderecoPorCoordenadas}
+                      disabled={loadingGeocode || !enderecoForm.latitude || !enderecoForm.longitude}
+                      className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {loadingGeocode ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Buscando...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="w-4 h-4" />
+                          Buscar Endereço
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                
+                <p className="text-xs text-blue-600 mt-2">
+                  💡 Cole as coordenadas do Google Maps e clique em "Buscar Endereço" para preencher automaticamente
+                </p>
               </div>
 
               {/* CEP e Número */}
@@ -1169,45 +1327,6 @@ const ClienteForm = () => {
                       <option key={uf} value={uf}>{uf}</option>
                     ))}
                   </select>
-                </div>
-              </div>
-
-              {/* Coordenadas GPS */}
-              <div className="pt-2">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="label mb-0">Coordenadas GPS</label>
-                  <button
-                    type="button"
-                    onClick={getMyLocation}
-                    className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
-                  >
-                    <MapPin className="w-4 h-4" />
-                    Usar minha localização
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-5">
-                  <div>
-                    <label className="text-xs text-gray-500">Latitude</label>
-                    <input
-                      type="text"
-                      name="latitude"
-                      value={enderecoForm.latitude}
-                      onChange={handleEnderecoChange}
-                      className="input-field"
-                      placeholder="-23.550520"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500">Longitude</label>
-                    <input
-                      type="text"
-                      name="longitude"
-                      value={enderecoForm.longitude}
-                      onChange={handleEnderecoChange}
-                      className="input-field"
-                      placeholder="-46.633308"
-                    />
-                  </div>
                 </div>
               </div>
 
