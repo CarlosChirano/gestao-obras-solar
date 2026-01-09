@@ -390,7 +390,7 @@ const ServicosExtras = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-5">
               <div>
                 <label className="label">Nome do Serviço *</label>
                 <input
@@ -431,28 +431,28 @@ const ServicosExtras = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="label">Valor de Venda (R$) *</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">R$</span>
+                  <label className="label">Valor de Venda *</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-500 font-medium text-sm">R$</span>
                     <input
                       type="text"
                       value={formData.valor_venda_formatado}
                       onChange={handleMoedaVendaChange}
-                      className="input-field pl-12"
+                      className="input-field flex-1"
                       placeholder="350,00"
                       required
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="label">Custo (R$) *</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">R$</span>
+                  <label className="label">Custo *</label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-500 font-medium text-sm">R$</span>
                     <input
                       type="text"
                       value={formData.valor_custo_formatado}
                       onChange={handleMoedaCustoChange}
-                      className="input-field pl-12"
+                      className="input-field flex-1"
                       placeholder="245,00"
                       required
                     />

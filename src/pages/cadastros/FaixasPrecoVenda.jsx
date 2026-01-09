@@ -349,7 +349,7 @@ const FaixasPrecoVenda = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="label">kWp Mínimo *</label>
@@ -378,14 +378,14 @@ const FaixasPrecoVenda = () => {
               </div>
 
               <div>
-                <label className="label">Valor de Venda (R$) *</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">R$</span>
+                <label className="label">Valor de Venda *</label>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-500 font-medium">R$</span>
                   <input
                     type="text"
                     value={formData.valorFormatado}
                     onChange={handleMoedaChange}
-                    className="input-field pl-12"
+                    className="input-field flex-1"
                     placeholder="1.500,00"
                     required
                   />
