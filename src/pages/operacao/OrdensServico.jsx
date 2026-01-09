@@ -8,13 +8,15 @@ import toast from 'react-hot-toast'
 const OrdensServico = () => {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [dataInicio, setDataInicio] = useState('')
+  const [dataFim, setDataFim] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [mostrarDeletados, setMostrarDeletados] = useState(false)
   const [deleteModal, setDeleteModal] = useState({ open: false, os: null })
   const queryClient = useQueryClient()
 
   const { data: ordens, isLoading, error: queryError } = useQuery({
-    queryKey: ['ordens-servico', statusFilter, mostrarDeletados],
+    queryKey: ['ordens-servico', statusFilter, mostrarDeletados, dataInicio, dataFim],
     queryFn: async () => {
       // Buscar OS básica primeiro
       let query = supabase
@@ -34,6 +36,16 @@ const OrdensServico = () => {
 
       if (statusFilter) {
         query = query.eq('status', statusFilter)
+      }
+
+      // Filtro de data início
+      if (dataInicio) {
+        query = query.gte('data_agendamento', dataInicio)
+      }
+
+      // Filtro de data fim
+      if (dataFim) {
+        query = query.lte('data_agendamento', dataFim)
       }
 
       const { data, error } = await query
@@ -235,21 +247,24 @@ const OrdensServico = () => {
       <div className="card space-y-4">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
               placeholder="Buscar por número, cliente, endereço..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="input-field pl-12"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           <button 
             onClick={() => setShowFilters(!showFilters)}
-            className="btn-secondary"
+            className={`btn-secondary ${showFilters ? 'bg-blue-50 border-blue-300' : ''}`}
           >
             <Filter className="w-5 h-5" />
             Filtros
+            {(dataInicio || dataFim) && (
+              <span className="ml-1 px-1.5 py-0.5 bg-blue-600 text-white rounded-full text-xs">!</span>
+            )}
             <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
           </button>
           <button
@@ -272,7 +287,7 @@ const OrdensServico = () => {
 
         {showFilters && (
           <div className="p-4 bg-gray-50 rounded-xl">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <label className="label">Status</label>
                 <select 
@@ -290,6 +305,98 @@ const OrdensServico = () => {
                   <option value="com_pendencia">Com Pendência</option>
                 </select>
               </div>
+              <div>
+                <label className="label">Data Início</label>
+                <input
+                  type="date"
+                  value={dataInicio}
+                  onChange={(e) => setDataInicio(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="label">Data Fim</label>
+                <input
+                  type="date"
+                  value={dataFim}
+                  onChange={(e) => setDataFim(e.target.value)}
+                  className="input-field"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={() => {
+                    setStatusFilter('')
+                    setDataInicio('')
+                    setDataFim('')
+                  }}
+                  className="btn-secondary w-full"
+                >
+                  <X className="w-4 h-4" />
+                  Limpar Filtros
+                </button>
+              </div>
+            </div>
+            
+            {/* Atalhos de período */}
+            <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
+              <span className="text-sm text-gray-500 mr-2">Período:</span>
+              <button
+                onClick={() => {
+                  const hoje = new Date()
+                  setDataInicio(hoje.toISOString().split('T')[0])
+                  setDataFim(hoje.toISOString().split('T')[0])
+                }}
+                className="px-3 py-1 text-xs bg-white border rounded-lg hover:bg-gray-50"
+              >
+                Hoje
+              </button>
+              <button
+                onClick={() => {
+                  const hoje = new Date()
+                  const inicioSemana = new Date(hoje)
+                  inicioSemana.setDate(hoje.getDate() - hoje.getDay())
+                  setDataInicio(inicioSemana.toISOString().split('T')[0])
+                  setDataFim(hoje.toISOString().split('T')[0])
+                }}
+                className="px-3 py-1 text-xs bg-white border rounded-lg hover:bg-gray-50"
+              >
+                Esta Semana
+              </button>
+              <button
+                onClick={() => {
+                  const hoje = new Date()
+                  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
+                  setDataInicio(inicioMes.toISOString().split('T')[0])
+                  setDataFim(hoje.toISOString().split('T')[0])
+                }}
+                className="px-3 py-1 text-xs bg-white border rounded-lg hover:bg-gray-50"
+              >
+                Este Mês
+              </button>
+              <button
+                onClick={() => {
+                  const hoje = new Date()
+                  const inicioMesPassado = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1)
+                  const fimMesPassado = new Date(hoje.getFullYear(), hoje.getMonth(), 0)
+                  setDataInicio(inicioMesPassado.toISOString().split('T')[0])
+                  setDataFim(fimMesPassado.toISOString().split('T')[0])
+                }}
+                className="px-3 py-1 text-xs bg-white border rounded-lg hover:bg-gray-50"
+              >
+                Mês Passado
+              </button>
+              <button
+                onClick={() => {
+                  const hoje = new Date()
+                  const inicioAno = new Date(hoje.getFullYear(), 0, 1)
+                  setDataInicio(inicioAno.toISOString().split('T')[0])
+                  setDataFim(hoje.toISOString().split('T')[0])
+                }}
+                className="px-3 py-1 text-xs bg-white border rounded-lg hover:bg-gray-50"
+              >
+                Este Ano
+              </button>
             </div>
           </div>
         )}
