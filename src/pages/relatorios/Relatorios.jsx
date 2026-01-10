@@ -86,9 +86,8 @@ const Relatorios = () => {
         .from('ordens_servico')
         .select(`
           id, numero_os, data_agendamento, status, valor_total,
-          quantidade_placas, tipo_telhado, potencia_kwp, tipo_servico_solar,
+          quantidade_placas, tipo_telhado, potencia_kwp,
           cliente:clientes(id, nome),
-          empresa:empresas_contratantes(id, nome),
           equipe:equipes(id, nome)
         `)
         .gte('data_agendamento', dataInicio)
@@ -103,8 +102,13 @@ const Relatorios = () => {
 
       console.log('OS encontradas:', ordens?.length || 0)
 
+      // Se não houver OS, retornar vazio
+      if (!ordens || ordens.length === 0) {
+        return []
+      }
+
       // Buscar colaboradores de todas as OS
-      const osIds = ordens?.map(o => o.id) || []
+      const osIds = ordens.map(o => o.id)
       
       const { data: colaboradores } = await supabase
         .from('os_colaboradores')
@@ -115,12 +119,6 @@ const Relatorios = () => {
       const { data: veiculos } = await supabase
         .from('os_veiculos')
         .select('ordem_servico_id, veiculo_id, valor_total, dias')
-        .in('ordem_servico_id', osIds)
-
-      // Buscar custos extras de todas as OS
-      const { data: custosExtras } = await supabase
-        .from('os_custos_extras')
-        .select('ordem_servico_id, valor')
         .in('ordem_servico_id', osIds)
 
       // Agrupar colaboradores por OS
@@ -134,13 +132,6 @@ const Relatorios = () => {
       const veiculosPorOS = veiculos?.reduce((acc, v) => {
         if (!acc[v.ordem_servico_id]) acc[v.ordem_servico_id] = []
         acc[v.ordem_servico_id].push(v)
-        return acc
-      }, {}) || {}
-
-      // Agrupar custos extras por OS
-      const custosPorOS = custosExtras?.reduce((acc, c) => {
-        if (!acc[c.ordem_servico_id]) acc[c.ordem_servico_id] = 0
-        acc[c.ordem_servico_id] += parseFloat(c.valor) || 0
         return acc
       }, {}) || {}
 
@@ -185,8 +176,8 @@ const Relatorios = () => {
           custoVeiculoRateado += valorVeiculo / totalOSVeiculoDia
         })
 
-        // Custos extras (não são rateados)
-        const custoExtras = custosPorOS[os.id] || 0
+        // Custos extras (não temos mais essa tabela, zerar)
+        const custoExtras = 0
 
         // Totais
         const custoTotalRateado = custoMaoObraRateado + custoVeiculoRateado + custoExtras
@@ -198,7 +189,6 @@ const Relatorios = () => {
           ...os,
           cliente_id: os.cliente?.id,
           cliente_nome: os.cliente?.nome || 'Sem cliente',
-          empresa_nome: os.empresa?.nome,
           equipe_nome: os.equipe?.nome,
           receita,
           custo_mao_obra_bruto: custoMaoObraBruto,
