@@ -78,14 +78,14 @@ const Relatorios = () => {
   // ============================================
 
   // Buscar OS do período com custos rateados
-  const { data: osData, isLoading: loadingOS } = useQuery({
+  const { data: osData, isLoading: loadingOS, error: queryError } = useQuery({
     queryKey: ['relatorio-os', dataInicio, dataFim],
     queryFn: async () => {
       // Buscar todas as OS do período
       const { data: ordens, error } = await supabase
         .from('ordens_servico')
         .select(`
-          id, numero, data_agendamento, status, valor_total,
+          id, numero_os, data_agendamento, status, valor_total,
           quantidade_placas, tipo_telhado, potencia_kwp, tipo_servico_solar,
           cliente:clientes(id, nome),
           empresa:empresas_contratantes(id, nome),
@@ -93,9 +93,15 @@ const Relatorios = () => {
         `)
         .gte('data_agendamento', dataInicio)
         .lte('data_agendamento', dataFim)
+        .or('deletado.is.null,deletado.eq.false')
         .order('data_agendamento', { ascending: false })
 
-      if (error) throw error
+      if (error) {
+        console.error('Erro ao buscar OS:', error)
+        throw error
+      }
+
+      console.log('OS encontradas:', ordens?.length || 0)
 
       // Buscar colaboradores de todas as OS
       const osIds = ordens?.map(o => o.id) || []
@@ -419,6 +425,15 @@ const Relatorios = () => {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    )
+  }
+
+  if (queryError) {
+    return (
+      <div className="card text-center py-12">
+        <div className="text-red-600 mb-2">Erro ao carregar relatório</div>
+        <div className="text-sm text-gray-500">{queryError.message}</div>
       </div>
     )
   }
@@ -803,7 +818,7 @@ const Relatorios = () => {
                           {os.data_agendamento ? new Date(os.data_agendamento).toLocaleDateString('pt-BR') : '-'}
                         </td>
                         <td className="px-3 py-2 text-sm font-medium text-gray-900">
-                          {os.numero || os.id.slice(0, 8)}
+                          {os.numero_os || os.id.slice(0, 8)}
                         </td>
                         <td className="px-3 py-2 text-sm text-gray-700">{os.cliente_nome}</td>
                         <td className="px-3 py-2 text-sm text-center text-gray-600">{os.quantidade_placas || '-'}</td>
