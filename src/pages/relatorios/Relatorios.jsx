@@ -81,8 +81,8 @@ const Relatorios = () => {
   const { data: osData, isLoading: loadingOS, error: queryError } = useQuery({
     queryKey: ['relatorio-os', dataInicio, dataFim],
     queryFn: async () => {
-      // Buscar todas as OS do período
-      const { data: ordens, error } = await supabase
+      // Buscar todas as OS do período - query simplificada
+      let query = supabase
         .from('ordens_servico')
         .select(`
           *,
@@ -90,10 +90,17 @@ const Relatorios = () => {
           equipe:equipes(id, nome)
         `)
         .eq('ativo', true)
-        .gte('data_agendamento', dataInicio)
-        .lte('data_agendamento', dataFim)
-        .or('deletado.is.null,deletado.eq.false')
         .order('data_agendamento', { ascending: false })
+
+      // Filtrar por período
+      if (dataInicio) {
+        query = query.gte('data_agendamento', dataInicio)
+      }
+      if (dataFim) {
+        query = query.lte('data_agendamento', dataFim)
+      }
+
+      const { data: ordens, error } = await query
 
       if (error) {
         console.error('Erro ao buscar OS:', error)
@@ -208,19 +215,21 @@ const Relatorios = () => {
     enabled: !!dataInicio && !!dataFim
   })
 
-  // Buscar colaboradores do período
+  // Buscar colaboradores do período (depende de osData)
   const { data: colaboradoresData } = useQuery({
-    queryKey: ['relatorio-colaboradores', dataInicio, dataFim],
+    queryKey: ['relatorio-colaboradores', dataInicio, dataFim, osData?.length],
     queryFn: async () => {
+      if (!osData || osData.length === 0) return []
+      
+      const osIds = osData.map(os => os.id)
+      
       const { data } = await supabase
         .from('os_colaboradores')
         .select(`
           colaborador_id, dias_trabalhados, valor_total,
-          colaborador:colaboradores(nome),
-          ordem_servico:ordens_servico!inner(data_agendamento)
+          colaborador:colaboradores(nome)
         `)
-        .gte('ordem_servico.data_agendamento', dataInicio)
-        .lte('ordem_servico.data_agendamento', dataFim)
+        .in('ordem_servico_id', osIds)
 
       // Agrupar por colaborador
       const porColaborador = data?.reduce((acc, c) => {
@@ -240,7 +249,8 @@ const Relatorios = () => {
       return Object.entries(porColaborador)
         .map(([id, data]) => ({ id, ...data }))
         .sort((a, b) => b.dias - a.dias)
-    }
+    },
+    enabled: !!osData && osData.length > 0
   })
 
   // ============================================
