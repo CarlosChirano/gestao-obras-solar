@@ -85,11 +85,11 @@ const Relatorios = () => {
       const { data: ordens, error } = await supabase
         .from('ordens_servico')
         .select(`
-          id, numero_os, data_agendamento, status, valor_total,
-          quantidade_placas, tipo_telhado, potencia_kwp,
+          *,
           cliente:clientes(id, nome),
           equipe:equipes(id, nome)
         `)
+        .eq('ativo', true)
         .gte('data_agendamento', dataInicio)
         .lte('data_agendamento', dataFim)
         .or('deletado.is.null,deletado.eq.false')
