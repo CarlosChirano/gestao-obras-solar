@@ -89,7 +89,6 @@ const Relatorios = () => {
           cliente:clientes(id, nome),
           equipe:equipes(id, nome)
         `)
-        .eq('ativo', true)
         .order('data_agendamento', { ascending: false })
 
       // Filtrar por período
