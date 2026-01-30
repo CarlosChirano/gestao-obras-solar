@@ -47,17 +47,14 @@ const DREObras = () => {
       const { data: ordens, error } = await supabase
         .from('ordens_servico')
         .select(`
-          id, numero, data_agendamento, status, valor_total,
+          id, numero_os, data_agendamento, status, valor_total,
           quantidade_placas, tipo_telhado, potencia_kwp,
           custo_previsto, cliente_endereco_id, endereco, cidade, estado,
           cliente:clientes(id, nome),
-          equipe:equipes(id, nome),
-          empresa:empresas_contratantes(id, nome),
-          cliente_endereco:cliente_enderecos(id, nome, endereco, cidade, estado)
+          equipe:equipes(id, nome)
         `)
         .gte('data_agendamento', dataInicio)
         .lte('data_agendamento', dataFim)
-        .or('deletado.is.null,deletado.eq.false')
         .order('data_agendamento', { ascending: false })
 
       if (error) throw error
@@ -68,7 +65,7 @@ const DREObras = () => {
       const { data: colaboradores } = await supabase
         .from('os_colaboradores')
         .select(`
-          ordem_servico_id, valor_total, dias_trabalhados, valor_diaria,
+          ordem_servico_id, colaborador_id, valor_total, dias_trabalhados, valor_diaria,
           valor_cafe, valor_almoco, valor_transporte, valor_outros,
           colaborador:colaboradores(nome)
         `)
@@ -89,6 +86,18 @@ const DREObras = () => {
         .select('ordem_servico_id, tipo, descricao, valor')
         .in('ordem_servico_id', osIds)
 
+      // Agrupar colaboradores por data para calcular rateio individual
+      const colaboradoresPorData = {}
+      colaboradores?.forEach(c => {
+        // Buscar a data da OS deste colaborador
+        const os = ordens?.find(o => o.id === c.ordem_servico_id)
+        if (os && os.data_agendamento && c.colaborador_id) {
+          const key = `${c.colaborador_id}_${os.data_agendamento}`
+          if (!colaboradoresPorData[key]) colaboradoresPorData[key] = []
+          colaboradoresPorData[key].push(c.ordem_servico_id)
+        }
+      })
+
       // Agrupar por OS
       const colaboradoresPorOS = colaboradores?.reduce((acc, c) => {
         if (!acc[c.ordem_servico_id]) acc[c.ordem_servico_id] = []
@@ -108,7 +117,7 @@ const DREObras = () => {
         return acc
       }, {}) || {}
 
-      // Calcular rateio por data/equipe
+      // Calcular rateio por data/equipe (para veículos)
       const osPorDataEquipe = {}
       ordens?.forEach(os => {
         const key = `${os.data_agendamento}_${os.equipe?.id || 'sem-equipe'}`
@@ -125,10 +134,19 @@ const DREObras = () => {
         const veics = veiculosPorOS[os.id] || []
         const extras = custosPorOS[os.id] || []
 
-        // Custos
+        // Custos de mão de obra - COM RATEIO POR COLABORADOR
         const custoMaoObraBruto = colabs.reduce((sum, c) => sum + (parseFloat(c.valor_total) || 0), 0)
-        const custoMaoObraRateado = custoMaoObraBruto / totalOSEquipeDia
+        let custoMaoObraRateado = 0
+        colabs.forEach(c => {
+          const valorTotal = parseFloat(c.valor_total) || 0
+          // Quantas OS este colaborador fez neste dia?
+          const keyColab = `${c.colaborador_id}_${os.data_agendamento}`
+          const qtdOSColabDia = colaboradoresPorData[keyColab]?.length || 1
+          // Ratear o custo do colaborador pelo número de OS que ele fez no dia
+          custoMaoObraRateado += valorTotal / qtdOSColabDia
+        })
 
+        // Custos de veículos - COM RATEIO POR EQUIPE/DIA
         const custoVeiculoBruto = veics.reduce((sum, v) => sum + (parseFloat(v.valor_total) || 0), 0)
         const custoVeiculoRateado = custoVeiculoBruto / totalOSEquipeDia
 
@@ -137,16 +155,16 @@ const DREObras = () => {
         const custoTotalReal = custoMaoObraRateado + custoVeiculoRateado + custoExtras
 
         // Chave da obra: Cliente + Endereço
-        const enderecoObra = os.cliente_endereco?.endereco || os.endereco || ''
-        const cidadeObra = os.cliente_endereco?.cidade || os.cidade || ''
+        const enderecoObra = os.endereco || ''
+        const cidadeObra = os.cidade || ''
         const chaveObra = `${os.cliente?.id || 'sem-cliente'}_${enderecoObra}_${cidadeObra}`.toLowerCase().trim()
 
         return {
           ...os,
+          numero: os.numero_os,
           cliente_nome: os.cliente?.nome || 'Sem cliente',
           cliente_id: os.cliente?.id,
           equipe_nome: os.equipe?.nome,
-          empresa_nome: os.empresa?.nome,
           endereco_obra: enderecoObra,
           cidade_obra: cidadeObra,
           chave_obra: chaveObra,
