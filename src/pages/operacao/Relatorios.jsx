@@ -5,7 +5,7 @@ import {
   FileText, TrendingUp, TrendingDown, DollarSign, Users, 
   BarChart3, MapPin, Target, Building2, 
   Loader2, Layers, AlertCircle, ChevronDown, ChevronUp,
-  Search
+  Search, X, Filter
 } from 'lucide-react'
 
 // ============================================
@@ -37,6 +37,7 @@ const Relatorios = () => {
   const [filtroCliente, setFiltroCliente] = useState('')
   const [obraExpandida, setObraExpandida] = useState(null)
   const [busca, setBusca] = useState('')
+  const [mostrarFiltros, setMostrarFiltros] = useState(false)
 
   // Atalhos de período
   const setPeriodo = (tipo) => {
@@ -332,26 +333,56 @@ const Relatorios = () => {
     return { osProcessadas, obras, metricas }
   }, [osData, faixasPreco])
 
+  // ============================================
+  // FILTRAR POR BUSCA GLOBAL
+  // ============================================
+  const aplicarBusca = (lista, campos) => {
+    if (!busca.trim()) return lista
+    const termo = busca.toLowerCase().trim()
+    return lista.filter(item => 
+      campos.some(campo => {
+        const valor = item[campo]
+        if (!valor) return false
+        return String(valor).toLowerCase().includes(termo)
+      })
+    )
+  }
+
   // Filtrar obras
   const obrasFiltradas = useMemo(() => {
     if (!dadosProcessados.obras) return []
     let resultado = dadosProcessados.obras
-    if (filtroCliente) resultado = resultado.filter(o => o.cliente_id === filtroCliente)
-    if (busca) {
-      const termo = busca.toLowerCase()
-      resultado = resultado.filter(o => 
-        o.cliente_nome.toLowerCase().includes(termo) ||
-        o.endereco.toLowerCase().includes(termo)
-      )
+    
+    // Filtro por cliente selecionado
+    if (filtroCliente) {
+      resultado = resultado.filter(o => o.cliente_id === filtroCliente)
     }
+    
+    // Busca global
+    resultado = aplicarBusca(resultado, ['cliente_nome', 'endereco', 'cidade'])
+    
     return resultado
   }, [dadosProcessados.obras, filtroCliente, busca])
 
-  // Por cliente
+  // Filtrar OS
+  const osFiltradas = useMemo(() => {
+    if (!dadosProcessados.osProcessadas) return []
+    let resultado = dadosProcessados.osProcessadas
+    
+    if (filtroCliente) {
+      resultado = resultado.filter(o => o.cliente_id === filtroCliente)
+    }
+    
+    resultado = aplicarBusca(resultado, ['cliente_nome', 'endereco', 'cidade', 'numero_os'])
+    
+    return resultado
+  }, [dadosProcessados.osProcessadas, filtroCliente, busca])
+
+  // Por cliente filtrado
   const porCliente = useMemo(() => {
-    if (!dadosProcessados.obras) return []
+    if (!obrasFiltradas) return []
     const map = {}
-    dadosProcessados.obras.forEach(obra => {
+    obrasFiltradas.forEach(obra => {
       const id = obra.cliente_id || 'sem'
       if (!map[id]) {
         map[id] = { cliente_id: id, cliente_nome: obra.cliente_nome, total_obras: 0, total_os: 0, receita: 0, custo: 0, lucro: 0 }
@@ -365,7 +396,28 @@ const Relatorios = () => {
     return Object.values(map)
       .map(c => ({ ...c, margem: c.receita > 0 ? (c.lucro / c.receita) * 100 : 0 }))
       .sort((a, b) => b.receita - a.receita)
-  }, [dadosProcessados.obras])
+  }, [obrasFiltradas])
+
+  // Métricas filtradas
+  const metricasFiltradas = useMemo(() => {
+    if (!obrasFiltradas || obrasFiltradas.length === 0) return null
+    
+    return {
+      totalObras: obrasFiltradas.length,
+      totalOS: osFiltradas.length,
+      receitaTotal: obrasFiltradas.reduce((sum, o) => sum + o.receita, 0),
+      custoTotal: obrasFiltradas.reduce((sum, o) => sum + o.custo_total, 0),
+      custoMaoObra: obrasFiltradas.reduce((sum, o) => sum + o.custo_mao_obra, 0),
+      custoVeiculo: obrasFiltradas.reduce((sum, o) => sum + o.custo_veiculo, 0),
+      lucroTotal: obrasFiltradas.reduce((sum, o) => sum + o.lucro, 0),
+      margemMedia: obrasFiltradas.reduce((sum, o) => sum + o.receita, 0) > 0 
+        ? (obrasFiltradas.reduce((sum, o) => sum + o.lucro, 0) / obrasFiltradas.reduce((sum, o) => sum + o.receita, 0)) * 100 
+        : 0,
+      totalPlacas: obrasFiltradas.reduce((sum, o) => sum + o.total_placas, 0)
+    }
+  }, [obrasFiltradas, osFiltradas])
+
+  const temFiltroAtivo = busca.trim() || filtroCliente
 
   // ============================================
   // RENDERIZAÇÃO
@@ -390,6 +442,7 @@ const Relatorios = () => {
   }
 
   const { metricas, obras, osProcessadas } = dadosProcessados
+  const metricasExibir = temFiltroAtivo ? metricasFiltradas : metricas
 
   return (
     <div className="space-y-6">
@@ -398,50 +451,124 @@ const Relatorios = () => {
         <p className="text-gray-600">Análise financeira por OBRA (Cliente + Endereço + Potência)</p>
       </div>
 
-      {/* Filtros */}
+      {/* Filtros de Período + Busca */}
       <div className="card">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            {['semana', 'mes', 'trimestre', 'ano'].map(periodo => (
-              <button key={periodo} onClick={() => setPeriodo(periodo)} className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 hover:bg-gray-50">
-                {periodo === 'mes' ? 'Mês' : periodo === 'trimestre' ? 'Trimestre' : periodo.charAt(0).toUpperCase() + periodo.slice(1)}
+        <div className="flex flex-col gap-4">
+          {/* Linha 1: Período */}
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              {['semana', 'mes', 'trimestre', 'ano'].map(periodo => (
+                <button key={periodo} onClick={() => setPeriodo(periodo)} className="px-3 py-1.5 text-sm rounded-lg border border-gray-200 hover:bg-gray-50">
+                  {periodo === 'mes' ? 'Mês' : periodo === 'trimestre' ? 'Trimestre' : periodo.charAt(0).toUpperCase() + periodo.slice(1)}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <div>
+                <label className="text-xs text-gray-500">Data Início</label>
+                <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="input-field" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Data Fim</label>
+                <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="input-field" />
+              </div>
+            </div>
+            <div className="text-sm text-gray-500 ml-auto">{osProcessadas?.length || 0} OS | {obras?.length || 0} Obras</div>
+          </div>
+
+          {/* Linha 2: Busca Global */}
+          <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-gray-100">
+            <div className="flex-1 min-w-[300px]">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Pesquisar por cliente, endereço, cidade ou nº OS..."
+                  className="input-field pl-10 pr-10 w-full"
+                />
+                {busca && (
+                  <button 
+                    onClick={() => setBusca('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+            
+            <button
+              onClick={() => setMostrarFiltros(!mostrarFiltros)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${mostrarFiltros || filtroCliente ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-gray-200 hover:bg-gray-50'}`}
+            >
+              <Filter className="w-4 h-4" />
+              Filtros
+              {filtroCliente && <span className="w-2 h-2 bg-blue-500 rounded-full"></span>}
+            </button>
+
+            {temFiltroAtivo && (
+              <button
+                onClick={() => { setBusca(''); setFiltroCliente(''); }}
+                className="text-sm text-red-600 hover:text-red-800"
+              >
+                Limpar filtros
               </button>
-            ))}
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <div>
-              <label className="text-xs text-gray-500">Data Início</label>
-              <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="input-field" />
+
+          {/* Filtros avançados */}
+          {mostrarFiltros && (
+            <div className="flex flex-wrap gap-4 pt-4 border-t border-gray-100">
+              <div className="min-w-[250px]">
+                <label className="text-sm text-gray-500">Filtrar por Cliente</label>
+                <select
+                  value={filtroCliente}
+                  onChange={(e) => setFiltroCliente(e.target.value)}
+                  className="input-field"
+                >
+                  <option value="">Todos os clientes</option>
+                  {clientesLista?.map(c => (<option key={c.id} value={c.id}>{c.nome}</option>))}
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="text-xs text-gray-500">Data Fim</label>
-              <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="input-field" />
+          )}
+
+          {/* Indicador de filtro ativo */}
+          {temFiltroAtivo && (
+            <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 px-3 py-2 rounded-lg">
+              <Search className="w-4 h-4" />
+              <span>
+                Mostrando {obrasFiltradas.length} de {obras?.length || 0} obras
+                {busca && <span className="font-medium"> • Busca: "{busca}"</span>}
+                {filtroCliente && <span className="font-medium"> • Cliente filtrado</span>}
+              </span>
             </div>
-          </div>
-          <div className="text-sm text-gray-500 ml-auto">{osProcessadas?.length || 0} OS | {obras?.length || 0} Obras</div>
+          )}
         </div>
       </div>
 
       {/* Cards */}
-      {metricas && (
+      {metricasExibir && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="card bg-gradient-to-br from-green-50 to-green-100 border-green-200">
             <p className="text-sm text-green-600">Receita Total</p>
-            <p className="text-2xl font-bold text-green-700">{formatCurrency(metricas.receitaTotal)}</p>
-            <p className="text-xs text-green-600">{metricas.totalObras} obras</p>
+            <p className="text-2xl font-bold text-green-700">{formatCurrency(metricasExibir.receitaTotal)}</p>
+            <p className="text-xs text-green-600">{metricasExibir.totalObras} obras</p>
           </div>
           <div className="card bg-gradient-to-br from-red-50 to-red-100 border-red-200">
             <p className="text-sm text-red-600">Custos Totais</p>
-            <p className="text-2xl font-bold text-red-700">{formatCurrency(metricas.custoTotal)}</p>
-            <p className="text-xs text-red-600">{metricas.totalOS} OS</p>
+            <p className="text-2xl font-bold text-red-700">{formatCurrency(metricasExibir.custoTotal)}</p>
+            <p className="text-xs text-red-600">{metricasExibir.totalOS} OS</p>
           </div>
-          <div className={`card bg-gradient-to-br ${metricas.lucroTotal >= 0 ? 'from-blue-50 to-blue-100 border-blue-200' : 'from-orange-50 to-orange-100 border-orange-200'}`}>
-            <p className={`text-sm ${metricas.lucroTotal >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>Lucro</p>
-            <p className={`text-2xl font-bold ${metricas.lucroTotal >= 0 ? 'text-blue-700' : 'text-orange-700'}`}>{formatCurrency(metricas.lucroTotal)}</p>
+          <div className={`card bg-gradient-to-br ${metricasExibir.lucroTotal >= 0 ? 'from-blue-50 to-blue-100 border-blue-200' : 'from-orange-50 to-orange-100 border-orange-200'}`}>
+            <p className={`text-sm ${metricasExibir.lucroTotal >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>Lucro</p>
+            <p className={`text-2xl font-bold ${metricasExibir.lucroTotal >= 0 ? 'text-blue-700' : 'text-orange-700'}`}>{formatCurrency(metricasExibir.lucroTotal)}</p>
           </div>
           <div className="card bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
             <p className="text-sm text-purple-600">Margem</p>
-            <p className={`text-2xl font-bold ${metricas.margemMedia >= 0 ? 'text-purple-700' : 'text-red-600'}`}>{formatPercent(metricas.margemMedia)}</p>
+            <p className={`text-2xl font-bold ${metricasExibir.margemMedia >= 0 ? 'text-purple-700' : 'text-red-600'}`}>{formatPercent(metricasExibir.margemMedia)}</p>
           </div>
         </div>
       )}
@@ -481,33 +608,33 @@ const Relatorios = () => {
           {abaAtiva === 'resumo' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="card">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">DRE</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">DRE {temFiltroAtivo && <span className="text-sm font-normal text-blue-600">(filtrado)</span>}</h3>
                 <div className="space-y-3">
                   <div className="flex justify-between py-2 border-b">
-                    <span className="font-medium">RECEITA ({metricas.totalObras} obras)</span>
-                    <span className="text-xl font-bold text-green-600">{formatCurrency(metricas.receitaTotal)}</span>
+                    <span className="font-medium">RECEITA ({metricasExibir?.totalObras || 0} obras)</span>
+                    <span className="text-xl font-bold text-green-600">{formatCurrency(metricasExibir?.receitaTotal || 0)}</span>
                   </div>
                   <div className="pl-4 space-y-2 text-sm">
-                    <div className="flex justify-between"><span className="text-gray-600">(-) Mão de Obra</span><span className="text-red-600">{formatCurrency(metricas.custoMaoObra)}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-600">(-) Veículos</span><span className="text-red-600">{formatCurrency(metricas.custoVeiculo)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-600">(-) Mão de Obra</span><span className="text-red-600">{formatCurrency(metricasExibir?.custoMaoObra || 0)}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-600">(-) Veículos</span><span className="text-red-600">{formatCurrency(metricasExibir?.custoVeiculo || 0)}</span></div>
                   </div>
                   <div className="flex justify-between py-2 border-t">
                     <span className="font-medium">TOTAL CUSTOS</span>
-                    <span className="text-lg font-bold text-red-600">{formatCurrency(metricas.custoTotal)}</span>
+                    <span className="text-lg font-bold text-red-600">{formatCurrency(metricasExibir?.custoTotal || 0)}</span>
                   </div>
-                  <div className={`flex justify-between py-3 border-t-2 ${metricas.lucroTotal >= 0 ? 'border-green-500' : 'border-red-500'}`}>
+                  <div className={`flex justify-between py-3 border-t-2 ${(metricasExibir?.lucroTotal || 0) >= 0 ? 'border-green-500' : 'border-red-500'}`}>
                     <span className="font-bold">LUCRO</span>
-                    <span className={`text-xl font-bold ${metricas.lucroTotal >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(metricas.lucroTotal)}</span>
+                    <span className={`text-xl font-bold ${(metricasExibir?.lucroTotal || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(metricasExibir?.lucroTotal || 0)}</span>
                   </div>
                 </div>
               </div>
               <div className="card">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Estatísticas</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500">Obras</p><p className="text-2xl font-bold">{metricas.totalObras}</p></div>
-                  <div className="p-4 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500">OS</p><p className="text-2xl font-bold text-blue-600">{metricas.totalOS}</p></div>
-                  <div className="p-4 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500">Ticket Médio</p><p className="text-2xl font-bold text-purple-600">{formatCurrency(metricas.ticketMedio)}</p></div>
-                  <div className="p-4 bg-yellow-50 rounded-xl"><p className="text-sm text-yellow-600">Placas</p><p className="text-2xl font-bold text-yellow-700">{metricas.totalPlacas}</p></div>
+                  <div className="p-4 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500">Obras</p><p className="text-2xl font-bold">{metricasExibir?.totalObras || 0}</p></div>
+                  <div className="p-4 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500">OS</p><p className="text-2xl font-bold text-blue-600">{metricasExibir?.totalOS || 0}</p></div>
+                  <div className="p-4 bg-gray-50 rounded-xl"><p className="text-sm text-gray-500">Ticket Médio</p><p className="text-2xl font-bold text-purple-600">{formatCurrency((metricasExibir?.totalObras || 0) > 0 ? (metricasExibir?.receitaTotal || 0) / metricasExibir.totalObras : 0)}</p></div>
+                  <div className="p-4 bg-yellow-50 rounded-xl"><p className="text-sm text-yellow-600">Placas</p><p className="text-2xl font-bold text-yellow-700">{metricasExibir?.totalPlacas || 0}</p></div>
                 </div>
               </div>
             </div>
@@ -519,28 +646,6 @@ const Relatorios = () => {
               <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
                 <p className="font-medium text-blue-800">OBRA = Cliente + Endereço + Potência</p>
                 <p className="text-sm text-blue-600">Receita conta <strong>uma vez</strong> por obra. Custos são somados de todas as OS.</p>
-              </div>
-
-              <div className="card">
-                <div className="flex flex-wrap gap-4 items-end">
-                  <div className="flex-1 min-w-[200px]">
-                    <label className="text-sm text-gray-500">Buscar</label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input type="text" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Cliente, endereço..." className="input-field pl-9" />
-                    </div>
-                  </div>
-                  <div className="min-w-[200px]">
-                    <label className="text-sm text-gray-500">Cliente</label>
-                    <select value={filtroCliente} onChange={(e) => setFiltroCliente(e.target.value)} className="input-field">
-                      <option value="">Todos</option>
-                      {clientesLista?.map(c => (<option key={c.id} value={c.id}>{c.nome}</option>))}
-                    </select>
-                  </div>
-                  {(filtroCliente || busca) && (
-                    <button onClick={() => { setFiltroCliente(''); setBusca(''); }} className="px-3 py-2 text-sm text-gray-600">Limpar</button>
-                  )}
-                </div>
               </div>
 
               <div className="space-y-3">
@@ -613,7 +718,7 @@ const Relatorios = () => {
                     )}
                   </div>
                 ))}
-                {obrasFiltradas.length === 0 && <div className="card text-center py-8 text-gray-500">Nenhuma obra encontrada</div>}
+                {obrasFiltradas.length === 0 && <div className="card text-center py-8 text-gray-500">Nenhuma obra encontrada {busca && `para "${busca}"`}</div>}
               </div>
             </div>
           )}
@@ -621,7 +726,7 @@ const Relatorios = () => {
           {/* POR CLIENTE */}
           {abaAtiva === 'clientes' && (
             <div className="card overflow-hidden">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Por Cliente</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Por Cliente {temFiltroAtivo && <span className="text-sm font-normal text-blue-600">(filtrado)</span>}</h3>
               {porCliente.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -641,20 +746,20 @@ const Relatorios = () => {
                     </tbody>
                   </table>
                 </div>
-              ) : <p className="text-center py-8 text-gray-500">Nenhum cliente</p>}
+              ) : <p className="text-center py-8 text-gray-500">Nenhum cliente encontrado</p>}
             </div>
           )}
 
           {/* TODAS AS OS */}
           {abaAtiva === 'os' && (
             <div className="card overflow-hidden">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Todas as OS ({osProcessadas?.length || 0})</h3>
-              {osProcessadas && osProcessadas.length > 0 ? (
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Todas as OS ({osFiltradas?.length || 0}) {temFiltroAtivo && <span className="text-sm font-normal text-blue-600">(filtrado)</span>}</h3>
+              {osFiltradas && osFiltradas.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead><tr className="bg-gray-50"><th className="px-3 py-2 text-left font-semibold text-gray-700">Data</th><th className="px-3 py-2 text-left font-semibold text-gray-700">OS</th><th className="px-3 py-2 text-left font-semibold text-gray-700">Cliente</th><th className="px-3 py-2 text-center font-semibold text-gray-700">kWp</th><th className="px-3 py-2 text-center font-semibold text-gray-700">Status</th><th className="px-3 py-2 text-right font-semibold text-gray-700">Receita</th><th className="px-3 py-2 text-right font-semibold text-gray-700">M.Obra</th><th className="px-3 py-2 text-right font-semibold text-gray-700">Veículo</th><th className="px-3 py-2 text-right font-semibold text-gray-700 bg-red-50">Custo</th><th className="px-3 py-2 text-right font-semibold text-gray-700 bg-blue-50">Lucro</th><th className="px-3 py-2 text-right font-semibold text-gray-700">Margem</th></tr></thead>
                     <tbody>
-                      {osProcessadas.map((os, idx) => (
+                      {osFiltradas.map((os, idx) => (
                         <tr key={os.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                           <td className="px-3 py-2 text-gray-600">{os.data_agendamento ? new Date(os.data_agendamento + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}</td>
                           <td className="px-3 py-2 font-medium text-gray-900">{os.numero_os || os.id.slice(0, 8)}</td>
@@ -672,7 +777,7 @@ const Relatorios = () => {
                     </tbody>
                   </table>
                 </div>
-              ) : <p className="text-center py-8 text-gray-500">Nenhuma OS</p>}
+              ) : <p className="text-center py-8 text-gray-500">Nenhuma OS encontrada {busca && `para "${busca}"`}</p>}
             </div>
           )}
         </>
