@@ -156,7 +156,14 @@ const OrdemServicoDetalhes = () => {
 
   // Calcular totais
   const totalServicos = servicos?.reduce((sum, s) => sum + (parseFloat(s.valor_total) || 0), 0) || 0
-  const totalMaoObra = colaboradores?.reduce((sum, c) => sum + (parseFloat(c.valor_total) || 0), 0) || 0
+  
+  // Mão de obra APENAS diárias (sem café, almoço, etc)
+  const totalDiarias = colaboradores?.reduce((sum, c) => {
+    const diaria = parseFloat(c.valor_diaria) || 0
+    const dias = parseFloat(c.dias_trabalhados) || 1
+    return sum + (diaria * dias)
+  }, 0) || 0
+  
   const totalCustosExtras = custosExtras?.reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0) || 0
   
   // Custos extras dos colaboradores (café, almoço, transporte, outros)
@@ -165,6 +172,9 @@ const OrdemServicoDetalhes = () => {
   const totalTransporteColab = colaboradores?.reduce((sum, c) => sum + (parseFloat(c.valor_transporte) || 0), 0) || 0
   const totalOutrosColab = colaboradores?.reduce((sum, c) => sum + (parseFloat(c.valor_outros) || 0), 0) || 0
   const totalExtrasColab = totalCafeColab + totalAlmocoColab + totalTransporteColab + totalOutrosColab
+  
+  // Total mão de obra = diárias + extras
+  const totalMaoObra = totalDiarias + totalExtrasColab
   
   // Custos de veículos (da nova tabela os_veiculos)
   const totalAluguelVeiculo = osVeiculos?.reduce((sum, v) => sum + (parseFloat(v.valor_aluguel) || 0), 0) || 0
@@ -420,19 +430,22 @@ const OrdemServicoDetalhes = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {colaboradores?.map((c) => (
+                    {colaboradores?.map((c) => {
+                      const totalDiaria = (parseFloat(c.valor_diaria) || 0) * (parseFloat(c.dias_trabalhados) || 1)
+                      const totalExtras = (parseFloat(c.valor_cafe) || 0) + (parseFloat(c.valor_almoco) || 0) + (parseFloat(c.valor_transporte) || 0) + (parseFloat(c.valor_outros) || 0)
+                      return (
                       <>
                         <tr key={c.id}>
                           <td className="px-4 py-2 font-medium text-gray-900">{c.colaborador?.nome}</td>
                           <td className="px-4 py-2 text-gray-600">{c.funcao?.nome || '-'}</td>
                           <td className="px-4 py-2 text-center text-gray-600">{c.dias_trabalhados}</td>
                           <td className="px-4 py-2 text-right text-gray-600">{formatCurrency(c.valor_diaria)}</td>
-                          <td className="px-4 py-2 text-right font-medium text-gray-900">{formatCurrency(c.valor_total)}</td>
+                          <td className="px-4 py-2 text-right font-medium text-gray-900">{formatCurrency(totalDiaria)}</td>
                         </tr>
                         {/* Linha extra com custos detalhados */}
                         {(c.valor_cafe > 0 || c.valor_almoco > 0 || c.valor_transporte > 0 || c.valor_outros > 0) && (
                           <tr key={`${c.id}-custos`} className="bg-gray-50">
-                            <td colSpan="5" className="px-4 py-1">
+                            <td colSpan="4" className="px-4 py-1">
                               <div className="flex flex-wrap gap-2 text-xs">
                                 {c.valor_cafe > 0 && (
                                   <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded">
@@ -456,15 +469,35 @@ const OrdemServicoDetalhes = () => {
                                 )}
                               </div>
                             </td>
+                            <td className="px-4 py-1 text-right text-xs text-gray-500">
+                              +{formatCurrency(totalExtras)}
+                            </td>
                           </tr>
                         )}
                       </>
-                    ))}
+                    )})}
                   </tbody>
                   <tfoot className="bg-gray-50">
                     <tr>
+                      <td colSpan="4" className="px-4 py-2 text-right text-sm text-gray-600">Total Diárias:</td>
+                      <td className="px-4 py-2 text-right font-medium text-gray-900">{formatCurrency(totalDiarias)}</td>
+                    </tr>
+                    {totalExtrasColab > 0 && (
+                      <tr>
+                        <td colSpan="4" className="px-4 py-1 text-right text-sm text-gray-500">
+                          <span className="flex items-center justify-end gap-2">
+                            Alimentação/Transporte:
+                            <span className="text-xs">
+                              (☕{formatCurrency(totalCafeColab)} + 🍽️{formatCurrency(totalAlmocoColab)} + 🚌{formatCurrency(totalTransporteColab)})
+                            </span>
+                          </span>
+                        </td>
+                        <td className="px-4 py-1 text-right text-sm text-gray-600">+{formatCurrency(totalExtrasColab)}</td>
+                      </tr>
+                    )}
+                    <tr className="border-t-2 border-gray-300">
                       <td colSpan="4" className="px-4 py-2 text-right font-medium text-gray-900">Total Mão de Obra:</td>
-                      <td className="px-4 py-2 text-right font-bold text-gray-900">{formatCurrency(totalMaoObra)}</td>
+                      <td className="px-4 py-2 text-right font-bold text-blue-600">{formatCurrency(totalMaoObra)}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -545,8 +578,8 @@ const OrdemServicoDetalhes = () => {
               </div>
               <hr />
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Mão de Obra</span>
-                <span className="text-gray-600">- {formatCurrency(totalMaoObra)}</span>
+                <span className="text-gray-500">Mão de Obra (Diárias)</span>
+                <span className="text-gray-600">- {formatCurrency(totalDiarias)}</span>
               </div>
               
               {/* Custos Extras dos Colaboradores */}
