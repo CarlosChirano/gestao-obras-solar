@@ -6,7 +6,7 @@ import {
   ArrowLeft, Save, Loader2, Plus, Trash2, MapPin, Calendar, Users, Wrench, 
   DollarSign, Car, FileText, Image, Video, Upload, Eye, X, Navigation, 
   Crosshair, ClipboardCheck, CalendarDays, CheckCircle, AlertTriangle,
-  Receipt, TrendingUp, TrendingDown, Sun
+  Receipt, TrendingUp, TrendingDown, Sun, RefreshCw
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DiarioObra from './DiarioObra'
@@ -147,7 +147,7 @@ const OrdemServicoForm = () => {
             id,
             colaborador_id,
             funcao_na_equipe,
-            colaborador:colaboradores(id, nome, valor_diaria, pix, valor_cafe_dia, valor_almoco_dia, valor_transporte_dia, valor_outros_dia, funcao:funcoes(nome, valor_diaria))
+            colaborador:colaboradores(id, nome, valor_diaria, funcao:funcoes(nome, valor_diaria))
           )
         `)
         .eq('ativo', true)
@@ -574,16 +574,6 @@ const OrdemServicoForm = () => {
       valor_diaria: 0,
       dias_trabalhados: formData.previsao_dias || 1,
       valor_total: 0,
-      // Custos diários (do cadastro)
-      valor_cafe_dia: 0,
-      valor_almoco_dia: 0,
-      valor_transporte_dia: 0,
-      valor_outros_dia: 0,
-      // Custos calculados (para salvar)
-      valor_cafe: 0,
-      valor_almoco: 0,
-      valor_transporte: 0,
-      valor_outros: 0,
       isNew: true
     }])
   }
@@ -605,36 +595,17 @@ const OrdemServicoForm = () => {
       
       // Adicionar membros da equipe
       const novosMembros = equipe.equipe_membros?.map(membro => {
-        const col = membro.colaborador
-        const valorDiaria = parseFloat(col?.valor_diaria) || parseFloat(col?.funcao?.valor_diaria) || 0
-        const dias = parseFloat(formData.previsao_dias) || 1
-        // Custos diários do cadastro do colaborador
-        const cafeDia = parseFloat(col?.valor_cafe_dia) || 0
-        const almocoDia = parseFloat(col?.valor_almoco_dia) || 0
-        const transporteDia = parseFloat(col?.valor_transporte_dia) || 0
-        const outrosDia = parseFloat(col?.valor_outros_dia) || 0
-        // Custo total = (diária + custos) × dias
-        const custoDiario = valorDiaria + cafeDia + almocoDia + transporteDia + outrosDia
+        const valorDiaria = parseFloat(membro.colaborador?.valor_diaria) || 
+                           parseFloat(membro.colaborador?.funcao?.valor_diaria) || 0
         return {
           colaborador_id: membro.colaborador_id,
-          funcao_id: col?.funcao?.id || '',
+          funcao_id: membro.colaborador?.funcao?.id || '',
           valor_diaria: valorDiaria,
-          dias_trabalhados: dias,
-          valor_total: dias * custoDiario,
-          colaborador_nome: col?.nome,
-          colaborador_pix: col?.pix,
-          funcao_nome: membro.funcao_na_equipe || col?.funcao?.nome,
-          // Custos diários (do cadastro)
-          valor_cafe_dia: cafeDia,
-          valor_almoco_dia: almocoDia,
-          valor_transporte_dia: transporteDia,
-          valor_outros_dia: outrosDia,
-          // Custos calculados (para salvar)
-          valor_cafe: cafeDia * dias,
-          valor_almoco: almocoDia * dias,
-          valor_transporte: transporteDia * dias,
-          valor_outros: outrosDia * dias,
-          fromEquipe: equipe.id,
+          dias_trabalhados: formData.previsao_dias || 1,
+          valor_total: (formData.previsao_dias || 1) * valorDiaria,
+          colaborador_nome: membro.colaborador?.nome,
+          funcao_nome: membro.funcao_na_equipe || membro.colaborador?.funcao?.nome,
+          fromEquipe: equipe.id, // Marcar de qual equipe veio
           isNew: true
         }
       }) || []
@@ -661,42 +632,91 @@ const OrdemServicoForm = () => {
         updated[index].colaborador_nome = col.nome
         updated[index].colaborador_pix = col.pix
         updated[index].funcao_nome = col.funcao?.nome
-        // Guardar valores de alimentação/transporte do cadastro
-        updated[index].valor_cafe_dia = parseFloat(col.valor_cafe_dia) || 0
-        updated[index].valor_almoco_dia = parseFloat(col.valor_almoco_dia) || 0
-        updated[index].valor_transporte_dia = parseFloat(col.valor_transporte_dia) || 0
-        updated[index].valor_outros_dia = parseFloat(col.valor_outros_dia) || 0
-        // Calcular total: (diária + café + almoço + transporte + outros) × dias
-        const dias = parseFloat(updated[index].dias_trabalhados) || 1
-        const custoDiario = valorDiaria + updated[index].valor_cafe_dia + updated[index].valor_almoco_dia + 
-                           updated[index].valor_transporte_dia + updated[index].valor_outros_dia
-        updated[index].valor_total = dias * custoDiario
-        // Guardar valores calculados para salvar no banco
-        updated[index].valor_cafe = updated[index].valor_cafe_dia * dias
-        updated[index].valor_almoco = updated[index].valor_almoco_dia * dias
-        updated[index].valor_transporte = updated[index].valor_transporte_dia * dias
-        updated[index].valor_outros = updated[index].valor_outros_dia * dias
+        updated[index].valor_total = (updated[index].dias_trabalhados || 1) * valorDiaria
+        // Guardar valores de alimentação
+        updated[index].valor_cafe = col.valor_cafe_dia || 0
+        updated[index].valor_almoco = col.valor_almoco_dia || 0
+        updated[index].valor_transporte = col.valor_transporte_dia || 0
+        updated[index].valor_outros = col.valor_outros_dia || 0
       }
     }
 
     if (field === 'dias_trabalhados' || field === 'valor_diaria') {
-      const dias = parseFloat(updated[index].dias_trabalhados) || 0
-      const diaria = parseFloat(updated[index].valor_diaria) || 0
-      const cafeDia = parseFloat(updated[index].valor_cafe_dia) || 0
-      const almocoDia = parseFloat(updated[index].valor_almoco_dia) || 0
-      const transporteDia = parseFloat(updated[index].valor_transporte_dia) || 0
-      const outrosDia = parseFloat(updated[index].valor_outros_dia) || 0
-      // Calcular total: (diária + café + almoço + transporte + outros) × dias
-      const custoDiario = diaria + cafeDia + almocoDia + transporteDia + outrosDia
-      updated[index].valor_total = dias * custoDiario
-      // Atualizar valores calculados
-      updated[index].valor_cafe = cafeDia * dias
-      updated[index].valor_almoco = almocoDia * dias
-      updated[index].valor_transporte = transporteDia * dias
-      updated[index].valor_outros = outrosDia * dias
+      updated[index].valor_total = (parseFloat(updated[index].dias_trabalhados) || 0) * (parseFloat(updated[index].valor_diaria) || 0)
     }
 
     setColaboradores(updated)
+  }
+
+  // ============================================
+  // RECALCULAR CUSTOS DOS COLABORADORES
+  // Busca os valores atuais do cadastro e recalcula
+  // ============================================
+  const [recalculando, setRecalculando] = useState(false)
+
+  const recalcularCustos = async () => {
+    if (colaboradores.length === 0) {
+      toast.error('Nenhum colaborador na OS')
+      return
+    }
+
+    setRecalculando(true)
+    try {
+      // Buscar dados atualizados dos colaboradores do banco
+      const colabIds = colaboradores.map(c => c.colaborador_id).filter(Boolean)
+      
+      if (colabIds.length === 0) {
+        toast.error('Selecione os colaboradores primeiro')
+        setRecalculando(false)
+        return
+      }
+
+      const { data: colabsAtualizados, error } = await supabase
+        .from('colaboradores')
+        .select('id, nome, valor_diaria, valor_cafe_dia, valor_almoco_dia, valor_transporte_dia, valor_outros_dia, funcao:funcoes(valor_diaria)')
+        .in('id', colabIds)
+
+      if (error) throw error
+
+      // Atualizar cada colaborador com os valores do banco
+      const colabsRecalculados = colaboradores.map(colab => {
+        const dadosAtuais = colabsAtualizados?.find(c => c.id === colab.colaborador_id)
+        
+        if (!dadosAtuais) return colab
+
+        // Pegar valores atualizados
+        const valorDiaria = parseFloat(dadosAtuais.valor_diaria) || parseFloat(dadosAtuais.funcao?.valor_diaria) || parseFloat(colab.valor_diaria) || 0
+        const valorCafe = parseFloat(dadosAtuais.valor_cafe_dia) || 0
+        const valorAlmoco = parseFloat(dadosAtuais.valor_almoco_dia) || 0
+        const valorTransporte = parseFloat(dadosAtuais.valor_transporte_dia) || 0
+        const valorOutros = parseFloat(dadosAtuais.valor_outros_dia) || 0
+        const dias = parseFloat(colab.dias_trabalhados) || 1
+
+        // Calcular total: (diária + café + almoço + transporte + outros) × dias
+        const custoTotalDia = valorDiaria + valorCafe + valorAlmoco + valorTransporte + valorOutros
+        const valorTotal = custoTotalDia * dias
+
+        return {
+          ...colab,
+          valor_diaria: valorDiaria,
+          valor_cafe: valorCafe * dias,
+          valor_almoco: valorAlmoco * dias,
+          valor_transporte: valorTransporte * dias,
+          valor_outros: valorOutros * dias,
+          valor_total: valorTotal
+        }
+      })
+
+      setColaboradores(colabsRecalculados)
+      
+      const totalRecalculado = colabsRecalculados.reduce((sum, c) => sum + (parseFloat(c.valor_total) || 0), 0)
+      toast.success(`Custos recalculados! Total: ${formatCurrency(totalRecalculado)}`)
+    } catch (error) {
+      console.error('Erro ao recalcular:', error)
+      toast.error('Erro ao recalcular custos')
+    } finally {
+      setRecalculando(false)
+    }
   }
 
   const removeColaborador = (index) => {
@@ -1087,12 +1107,7 @@ const OrdemServicoForm = () => {
           funcao_id: c.funcao_id || null,
           valor_diaria: parseFloat(c.valor_diaria) || 0,
           dias_trabalhados: parseFloat(c.dias_trabalhados) || 1,
-          valor_total: parseFloat(c.valor_total) || 0,
-          // Novos campos de custos
-          valor_cafe: parseFloat(c.valor_cafe) || 0,
-          valor_almoco: parseFloat(c.valor_almoco) || 0,
-          valor_transporte: parseFloat(c.valor_transporte) || 0,
-          valor_outros: parseFloat(c.valor_outros) || 0
+          valor_total: parseFloat(c.valor_total) || 0
         }))
         
         console.log('🔍 DEBUG - Dados a inserir:', JSON.stringify(colaboradoresData, null, 2))
@@ -1679,9 +1694,26 @@ const OrdemServicoForm = () => {
                     Colaboradores das equipes selecionadas ou adicionados manualmente
                   </p>
                 </div>
-                <button type="button" onClick={addColaborador} className="btn-secondary">
-                  <Plus className="w-4 h-4" /> Adicionar Individual
-                </button>
+                <div className="flex items-center gap-2">
+                  {isEditing && colaboradores.length > 0 && (
+                    <button 
+                      type="button" 
+                      onClick={recalcularCustos} 
+                      disabled={recalculando}
+                      className="btn-secondary bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100"
+                    >
+                      {recalculando ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4" />
+                      )}
+                      Recalcular Custos
+                    </button>
+                  )}
+                  <button type="button" onClick={addColaborador} className="btn-secondary">
+                    <Plus className="w-4 h-4" /> Adicionar Individual
+                  </button>
+                </div>
               </div>
 
               {colaboradores.length === 0 ? (
@@ -1690,10 +1722,7 @@ const OrdemServicoForm = () => {
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {colaboradores.map((colab, index) => {
-                    const temCustos = (colab.valor_cafe_dia || 0) + (colab.valor_almoco_dia || 0) + 
-                                     (colab.valor_transporte_dia || 0) + (colab.valor_outros_dia || 0) > 0
-                    return (
+                  {colaboradores.map((colab, index) => (
                     <div key={index} className="p-4 bg-gray-50 rounded-xl">
                       <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
                         <div className="md:col-span-2">
@@ -1737,31 +1766,34 @@ const OrdemServicoForm = () => {
                           </button>
                         </div>
                       </div>
-                      {/* Mostrar custos extras se houver */}
-                      {temCustos && (
-                        <div className="mt-2 pt-2 border-t border-gray-200 flex flex-wrap gap-3 text-xs text-gray-500">
-                          <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 bg-orange-400 rounded-full"></span>
-                            Café: {formatCurrency(colab.valor_cafe || 0)}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 bg-red-400 rounded-full"></span>
-                            Almoço: {formatCurrency(colab.valor_almoco || 0)}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <span className="w-2 h-2 bg-blue-400 rounded-full"></span>
-                            Transporte: {formatCurrency(colab.valor_transporte || 0)}
-                          </span>
-                          {(colab.valor_outros || 0) > 0 && (
-                            <span className="flex items-center gap-1">
-                              <span className="w-2 h-2 bg-purple-400 rounded-full"></span>
-                              Outros: {formatCurrency(colab.valor_outros || 0)}
+                      
+                      {/* Exibir custos detalhados se existirem */}
+                      {(colab.valor_cafe > 0 || colab.valor_almoco > 0 || colab.valor_transporte > 0 || colab.valor_outros > 0) && (
+                        <div className="mt-2 pt-2 border-t border-gray-200 flex flex-wrap gap-3 text-xs">
+                          {colab.valor_cafe > 0 && (
+                            <span className="px-2 py-1 bg-yellow-100 text-yellow-700 rounded">
+                              ☕ Café: {formatCurrency(colab.valor_cafe)}
+                            </span>
+                          )}
+                          {colab.valor_almoco > 0 && (
+                            <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded">
+                              🍽️ Almoço: {formatCurrency(colab.valor_almoco)}
+                            </span>
+                          )}
+                          {colab.valor_transporte > 0 && (
+                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                              🚌 Transporte: {formatCurrency(colab.valor_transporte)}
+                            </span>
+                          )}
+                          {colab.valor_outros > 0 && (
+                            <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded">
+                              📦 Outros: {formatCurrency(colab.valor_outros)}
                             </span>
                           )}
                         </div>
                       )}
                     </div>
-                  )})}
+                  ))}
                 </div>
               )}
 

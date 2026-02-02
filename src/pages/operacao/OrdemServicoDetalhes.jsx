@@ -159,6 +159,13 @@ const OrdemServicoDetalhes = () => {
   const totalMaoObra = colaboradores?.reduce((sum, c) => sum + (parseFloat(c.valor_total) || 0), 0) || 0
   const totalCustosExtras = custosExtras?.reduce((sum, c) => sum + (parseFloat(c.valor) || 0), 0) || 0
   
+  // Custos extras dos colaboradores (café, almoço, transporte, outros)
+  const totalCafeColab = colaboradores?.reduce((sum, c) => sum + (parseFloat(c.valor_cafe) || 0), 0) || 0
+  const totalAlmocoColab = colaboradores?.reduce((sum, c) => sum + (parseFloat(c.valor_almoco) || 0), 0) || 0
+  const totalTransporteColab = colaboradores?.reduce((sum, c) => sum + (parseFloat(c.valor_transporte) || 0), 0) || 0
+  const totalOutrosColab = colaboradores?.reduce((sum, c) => sum + (parseFloat(c.valor_outros) || 0), 0) || 0
+  const totalExtrasColab = totalCafeColab + totalAlmocoColab + totalTransporteColab + totalOutrosColab
+  
   // Custos de veículos (da nova tabela os_veiculos)
   const totalAluguelVeiculo = osVeiculos?.reduce((sum, v) => sum + (parseFloat(v.valor_aluguel) || 0), 0) || 0
   const totalGasolina = osVeiculos?.reduce((sum, v) => sum + (parseFloat(v.valor_gasolina) || 0), 0) || 0
@@ -414,13 +421,44 @@ const OrdemServicoDetalhes = () => {
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {colaboradores?.map((c) => (
-                      <tr key={c.id}>
-                        <td className="px-4 py-2 font-medium text-gray-900">{c.colaborador?.nome}</td>
-                        <td className="px-4 py-2 text-gray-600">{c.funcao?.nome || '-'}</td>
-                        <td className="px-4 py-2 text-center text-gray-600">{c.dias_trabalhados}</td>
-                        <td className="px-4 py-2 text-right text-gray-600">{formatCurrency(c.valor_diaria)}</td>
-                        <td className="px-4 py-2 text-right font-medium text-gray-900">{formatCurrency(c.valor_total)}</td>
-                      </tr>
+                      <>
+                        <tr key={c.id}>
+                          <td className="px-4 py-2 font-medium text-gray-900">{c.colaborador?.nome}</td>
+                          <td className="px-4 py-2 text-gray-600">{c.funcao?.nome || '-'}</td>
+                          <td className="px-4 py-2 text-center text-gray-600">{c.dias_trabalhados}</td>
+                          <td className="px-4 py-2 text-right text-gray-600">{formatCurrency(c.valor_diaria)}</td>
+                          <td className="px-4 py-2 text-right font-medium text-gray-900">{formatCurrency(c.valor_total)}</td>
+                        </tr>
+                        {/* Linha extra com custos detalhados */}
+                        {(c.valor_cafe > 0 || c.valor_almoco > 0 || c.valor_transporte > 0 || c.valor_outros > 0) && (
+                          <tr key={`${c.id}-custos`} className="bg-gray-50">
+                            <td colSpan="5" className="px-4 py-1">
+                              <div className="flex flex-wrap gap-2 text-xs">
+                                {c.valor_cafe > 0 && (
+                                  <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded">
+                                    ☕ Café: {formatCurrency(c.valor_cafe)}
+                                  </span>
+                                )}
+                                {c.valor_almoco > 0 && (
+                                  <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded">
+                                    🍽️ Almoço: {formatCurrency(c.valor_almoco)}
+                                  </span>
+                                )}
+                                {c.valor_transporte > 0 && (
+                                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded">
+                                    🚌 Transporte: {formatCurrency(c.valor_transporte)}
+                                  </span>
+                                )}
+                                {c.valor_outros > 0 && (
+                                  <span className="px-2 py-0.5 bg-gray-200 text-gray-700 rounded">
+                                    📦 Outros: {formatCurrency(c.valor_outros)}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
                     ))}
                   </tbody>
                   <tfoot className="bg-gray-50">
@@ -510,6 +548,38 @@ const OrdemServicoDetalhes = () => {
                 <span className="text-gray-500">Mão de Obra</span>
                 <span className="text-gray-600">- {formatCurrency(totalMaoObra)}</span>
               </div>
+              
+              {/* Custos Extras dos Colaboradores */}
+              {totalExtrasColab > 0 && (
+                <>
+                  <div className="text-xs text-gray-400 uppercase mt-2">Alimentação/Transporte</div>
+                  {totalCafeColab > 0 && (
+                    <div className="flex justify-between text-sm pl-2">
+                      <span className="text-gray-500">☕ Café</span>
+                      <span className="text-gray-600">- {formatCurrency(totalCafeColab)}</span>
+                    </div>
+                  )}
+                  {totalAlmocoColab > 0 && (
+                    <div className="flex justify-between text-sm pl-2">
+                      <span className="text-gray-500">🍽️ Almoço</span>
+                      <span className="text-gray-600">- {formatCurrency(totalAlmocoColab)}</span>
+                    </div>
+                  )}
+                  {totalTransporteColab > 0 && (
+                    <div className="flex justify-between text-sm pl-2">
+                      <span className="text-gray-500">🚌 Transporte</span>
+                      <span className="text-gray-600">- {formatCurrency(totalTransporteColab)}</span>
+                    </div>
+                  )}
+                  {totalOutrosColab > 0 && (
+                    <div className="flex justify-between text-sm pl-2">
+                      <span className="text-gray-500">📦 Outros</span>
+                      <span className="text-gray-600">- {formatCurrency(totalOutrosColab)}</span>
+                    </div>
+                  )}
+                </>
+              )}
+              
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Materiais</span>
                 <span className="text-gray-600">- {formatCurrency(os.valor_materiais)}</span>
