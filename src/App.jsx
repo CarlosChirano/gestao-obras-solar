@@ -21,6 +21,7 @@ import OrdemServicoDetalhes from './pages/operacao/OrdemServicoDetalhes'
 import Calendario from './pages/operacao/Calendario'
 import Relatorios from './pages/operacao/Relatorios'
 import DashboardCheckins from './pages/operacao/DashboardCheckins'
+import CustosEquipe from './pages/operacao/CustosEquipe'
 
 // Área do Colaborador (Mobile)
 import ColaboradorLogin from './pages/colaborador/ColaboradorLogin'
@@ -163,6 +164,12 @@ function App() {
             <Route path="/relatorios" element={
               <PrivateRoute>
                 <Relatorios />
+              </PrivateRoute>
+            } />
+
+            <Route path="/custos-equipe" element={
+              <PrivateRoute>
+                <CustosEquipe />
               </PrivateRoute>
             } />
 

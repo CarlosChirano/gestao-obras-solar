@@ -26,7 +26,8 @@ import {
   MapPin,
   Wallet,
   TrendingUp,
-  Package
+  Package,
+  Banknote
 } from 'lucide-react'
 
 const MainLayout = ({ children }) => {
@@ -68,6 +69,11 @@ const MainLayout = ({ children }) => {
       label: 'Relatórios', 
       icon: FileText, 
       path: '/relatorios' 
+    },
+    { 
+      label: 'Custos de Equipe', 
+      icon: Banknote, 
+      path: '/custos-equipe' 
     },
   ]
 

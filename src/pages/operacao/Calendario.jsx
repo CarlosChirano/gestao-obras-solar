@@ -2,10 +2,16 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import { ChevronLeft, ChevronRight, Plus, Loader2, MapPin } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Loader2, MapPin, X, Users, DollarSign, Clock, Eye } from 'lucide-react'
+
+const formatCurrency = (value) => {
+  if (!value && value !== 0) return 'R$ 0,00'
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
+}
 
 const Calendario = () => {
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [diaExpandido, setDiaExpandido] = useState(null) // { date, dateStr }
 
   const { data: ordensServico, isLoading } = useQuery({
     queryKey: ['calendario-os', currentDate.getMonth(), currentDate.getFullYear()],
@@ -26,51 +32,52 @@ const Calendario = () => {
         .order('data_agendamento')
 
       if (error) throw error
+
+      // Buscar colaboradores e veículos para todas as OS do mês
+      if (data && data.length > 0) {
+        const osIds = data.map(os => os.id)
+
+        const { data: colabs } = await supabase
+          .from('os_colaboradores')
+          .select('ordem_servico_id, colaborador_id, valor_total, colaborador:colaboradores(nome)')
+          .in('ordem_servico_id', osIds)
+
+        const { data: veiculos } = await supabase
+          .from('os_veiculos')
+          .select('ordem_servico_id, valor_aluguel, valor_gasolina, valor_gelo, valor_cafe, valor_total')
+          .in('ordem_servico_id', osIds)
+
+        // Agrupar por OS
+        data.forEach(os => {
+          os._colaboradores = colabs?.filter(c => c.ordem_servico_id === os.id) || []
+          os._veiculos = veiculos?.filter(v => v.ordem_servico_id === os.id) || []
+          os._custoMaoObra = os._colaboradores.reduce((s, c) => s + (parseFloat(c.valor_total) || 0), 0)
+          os._custoVeiculo = os._veiculos.reduce((s, v) => s + (parseFloat(v.valor_total) || 0), 0)
+          os._custoTotal = os._custoMaoObra + os._custoVeiculo
+        })
+      }
+
       return data
     }
   })
 
-  // Navegação do calendário
-  const prevMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))
-  }
+  const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))
+  const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))
+  const goToToday = () => setCurrentDate(new Date())
 
-  const nextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))
-  }
-
-  const goToToday = () => {
-    setCurrentDate(new Date())
-  }
-
-  // Gerar dias do calendário
   const generateCalendarDays = () => {
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
-
     const firstDay = new Date(year, month, 1)
     const lastDay = new Date(year, month + 1, 0)
-
     const daysInMonth = lastDay.getDate()
-    const startingDay = firstDay.getDay() // 0 = Domingo
-
+    const startingDay = firstDay.getDay()
     const days = []
-
-    // Dias do mês anterior (vazios)
-    for (let i = 0; i < startingDay; i++) {
-      days.push({ day: null, date: null })
-    }
-
-    // Dias do mês atual
-    for (let i = 1; i <= daysInMonth; i++) {
-      const date = new Date(year, month, i)
-      days.push({ day: i, date })
-    }
-
+    for (let i = 0; i < startingDay; i++) days.push({ day: null, date: null })
+    for (let i = 1; i <= daysInMonth; i++) days.push({ day: i, date: new Date(year, month, i) })
     return days
   }
 
-  // Agrupar OS por dia
   const getOSByDate = (date) => {
     if (!date || !ordensServico) return []
     const dateStr = date.toISOString().split('T')[0]
@@ -90,6 +97,32 @@ const Calendario = () => {
     return colors[status] || 'bg-gray-500'
   }
 
+  const getStatusLabel = (status) => {
+    const labels = {
+      agendada: 'Agendada',
+      confirmada: 'Confirmada',
+      em_execucao: 'Em Execução',
+      pausada: 'Pausada',
+      concluida: 'Concluída',
+      cancelada: 'Cancelada',
+      com_pendencia: 'Pendência'
+    }
+    return labels[status] || status
+  }
+
+  const getStatusBadge = (status) => {
+    const styles = {
+      agendada: 'bg-blue-100 text-blue-700',
+      confirmada: 'bg-cyan-100 text-cyan-700',
+      em_execucao: 'bg-yellow-100 text-yellow-700',
+      pausada: 'bg-orange-100 text-orange-700',
+      concluida: 'bg-green-100 text-green-700',
+      cancelada: 'bg-red-100 text-red-700',
+      com_pendencia: 'bg-purple-100 text-purple-700'
+    }
+    return styles[status] || 'bg-gray-100 text-gray-700'
+  }
+
   const isToday = (date) => {
     if (!date) return false
     const today = new Date()
@@ -100,10 +133,22 @@ const Calendario = () => {
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
   ]
-
   const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
-
   const calendarDays = generateCalendarDays()
+
+  // OS do dia expandido
+  const osDiaExpandido = diaExpandido ? getOSByDate(diaExpandido.date) : []
+
+  const handleDiaClick = (date) => {
+    if (!date) return
+    const osDay = getOSByDate(date)
+    if (osDay.length > 0) {
+      setDiaExpandido({
+        date,
+        dateStr: date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+      })
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -132,9 +177,7 @@ const Calendario = () => {
               {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
             </h2>
           </div>
-          <button onClick={goToToday} className="btn-secondary text-sm">
-            Hoje
-          </button>
+          <button onClick={goToToday} className="btn-secondary text-sm">Hoje</button>
         </div>
 
         {isLoading ? (
@@ -146,9 +189,7 @@ const Calendario = () => {
             {/* Cabeçalho dos dias da semana */}
             <div className="grid grid-cols-7 gap-1 mb-2">
               {weekDays.map((day) => (
-                <div key={day} className="text-center text-sm font-medium text-gray-500 py-2">
-                  {day}
-                </div>
+                <div key={day} className="text-center text-sm font-medium text-gray-500 py-2">{day}</div>
               ))}
             </div>
 
@@ -157,39 +198,49 @@ const Calendario = () => {
               {calendarDays.map((item, index) => {
                 const osDay = getOSByDate(item.date)
                 const today = isToday(item.date)
+                const hasOS = osDay.length > 0
 
                 return (
                   <div
                     key={index}
-                    className={`min-h-[100px] p-1 border rounded-lg ${
-                      item.day 
-                        ? today 
-                          ? 'bg-blue-50 border-blue-300' 
-                          : 'bg-white border-gray-200 hover:bg-gray-50'
+                    onClick={() => handleDiaClick(item.date)}
+                    className={`min-h-[100px] p-1 border rounded-lg transition-colors ${
+                      item.day
+                        ? today
+                          ? 'bg-blue-50 border-blue-300'
+                          : hasOS
+                            ? 'bg-white border-gray-200 hover:bg-blue-50 hover:border-blue-200 cursor-pointer'
+                            : 'bg-white border-gray-200'
                         : 'bg-gray-50 border-gray-100'
                     }`}
                   >
                     {item.day && (
                       <>
-                        <div className={`text-sm font-medium mb-1 ${today ? 'text-blue-600' : 'text-gray-700'}`}>
-                          {item.day}
+                        <div className="flex items-center justify-between">
+                          <span className={`text-sm font-medium mb-1 ${today ? 'text-blue-600' : 'text-gray-700'}`}>
+                            {item.day}
+                          </span>
+                          {hasOS && (
+                            <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 rounded-full font-medium">
+                              {osDay.length}
+                            </span>
+                          )}
                         </div>
                         <div className="space-y-1">
                           {osDay.slice(0, 3).map((os) => (
-                            <Link
+                            <div
                               key={os.id}
-                              to={`/ordens-servico/${os.id}`}
-                              className={`block text-xs p-1 rounded truncate text-white ${
+                              className={`text-xs p-1 rounded truncate text-white ${
                                 os.equipe?.cor ? '' : getStatusColor(os.status)
                               }`}
                               style={os.equipe?.cor ? { backgroundColor: os.equipe.cor } : {}}
                               title={os.cliente?.nome}
                             >
                               {os.cliente?.nome || 'OS'}
-                            </Link>
+                            </div>
                           ))}
                           {osDay.length > 3 && (
-                            <div className="text-xs text-gray-500 text-center">
+                            <div className="text-xs text-blue-600 text-center font-medium cursor-pointer">
                               +{osDay.length - 3} mais
                             </div>
                           )}
@@ -203,6 +254,132 @@ const Calendario = () => {
           </>
         )}
       </div>
+
+      {/* ============================================ */}
+      {/* MODAL: DIA EXPANDIDO */}
+      {/* ============================================ */}
+      {diaExpandido && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setDiaExpandido(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            {/* Header do Modal */}
+            <div className="flex items-center justify-between px-6 py-4 border-b bg-gradient-to-r from-blue-50 to-white">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 capitalize">{diaExpandido.dateStr}</h3>
+                <p className="text-sm text-gray-500">{osDiaExpandido.length} ordem{osDiaExpandido.length !== 1 ? 'ns' : ''} de serviço</p>
+              </div>
+              <button onClick={() => setDiaExpandido(null)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Resumo do dia */}
+            <div className="px-6 py-3 bg-gray-50 border-b grid grid-cols-3 gap-4 text-center">
+              <div>
+                <p className="text-xs text-gray-500">Receita do dia</p>
+                <p className="text-sm font-bold text-green-600">
+                  {formatCurrency(osDiaExpandido.reduce((s, os) => s + (parseFloat(os.valor_cobrado || os.valor_total) || 0), 0))}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Custo do dia</p>
+                <p className="text-sm font-bold text-red-600">
+                  {formatCurrency(osDiaExpandido.reduce((s, os) => s + (os._custoTotal || 0), 0))}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Colaboradores</p>
+                <p className="text-sm font-bold text-blue-600">
+                  {[...new Set(osDiaExpandido.flatMap(os => (os._colaboradores || []).map(c => c.colaborador_id)))].length}
+                </p>
+              </div>
+            </div>
+
+            {/* Lista de OS */}
+            <div className="overflow-y-auto max-h-[55vh] divide-y">
+              {osDiaExpandido.map((os) => {
+                const valorExibir = parseFloat(os.valor_cobrado || os.valor_total) || 0
+                const margem = valorExibir - (os._custoTotal || 0)
+
+                return (
+                  <div key={os.id} className="px-6 py-4 hover:bg-gray-50">
+                    <div className="flex items-start justify-between gap-4">
+                      {/* Info da OS */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(os.status)}`}>
+                            {getStatusLabel(os.status)}
+                          </span>
+                          {os.equipe && (
+                            <span className="flex items-center gap-1 text-xs text-gray-500">
+                              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: os.equipe.cor }} />
+                              {os.equipe.nome}
+                            </span>
+                          )}
+                          {os.numero_os && (
+                            <span className="text-xs text-gray-400">#{os.numero_os}</span>
+                          )}
+                        </div>
+                        <h4 className="font-semibold text-gray-900 truncate">{os.cliente?.nome || 'Sem cliente'}</h4>
+                        {os.endereco && (
+                          <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                            <MapPin className="w-3 h-3" /> {os.endereco}{os.cidade ? ` - ${os.cidade}` : ''}
+                          </p>
+                        )}
+
+                        {/* Colaboradores */}
+                        {os._colaboradores?.length > 0 && (
+                          <div className="flex items-center gap-1 mt-2 text-xs text-gray-500">
+                            <Users className="w-3 h-3" />
+                            <span>{os._colaboradores.length} colaborador{os._colaboradores.length > 1 ? 'es' : ''}</span>
+                            <span className="text-gray-400">—</span>
+                            <span className="truncate">
+                              {os._colaboradores.map(c => c.colaborador?.nome || '').filter(Boolean).join(', ')}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Custos detalhados */}
+                        <div className="flex items-center gap-4 mt-2 text-xs">
+                          {os._custoMaoObra > 0 && (
+                            <span className="text-orange-600">
+                              Mão de Obra: {formatCurrency(os._custoMaoObra)}
+                            </span>
+                          )}
+                          {os._custoVeiculo > 0 && (
+                            <span className="text-purple-600">
+                              Veículo: {formatCurrency(os._custoVeiculo)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Valores */}
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-xs text-gray-500">Valor</p>
+                        <p className="font-bold text-green-600">{formatCurrency(valorExibir)}</p>
+                        {os._custoTotal > 0 && (
+                          <>
+                            <p className="text-xs text-gray-500 mt-1">Custo: {formatCurrency(os._custoTotal)}</p>
+                            <p className={`text-xs font-semibold ${margem >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                              Margem: {formatCurrency(margem)}
+                            </p>
+                          </>
+                        )}
+                        <Link
+                          to={`/ordens-servico/${os.id}`}
+                          className="inline-flex items-center gap-1 mt-2 text-xs text-blue-600 hover:text-blue-800"
+                        >
+                          <Eye className="w-3 h-3" /> Ver OS
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Legenda */}
       <div className="card">
@@ -222,85 +399,7 @@ const Calendario = () => {
             </div>
           ))}
         </div>
-        <p className="text-xs text-gray-500 mt-3">
-          * OS com equipe designada usam a cor da equipe
-        </p>
-      </div>
-
-      {/* Lista do Mês */}
-      <div className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          OS de {monthNames[currentDate.getMonth()]}
-        </h3>
-        {ordensServico?.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">Nenhuma OS agendada para este mês</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase">Data</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase">Cliente</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase">Local</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase">Equipe</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {ordensServico?.map((os) => (
-                  <tr key={os.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900">
-                      {new Date(os.data_agendamento).toLocaleDateString('pt-BR')}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link to={`/ordens-servico/${os.id}`} className="font-medium text-blue-600 hover:underline">
-                        {os.cliente?.nome}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {os.cidade ? (
-                        <span className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3" />
-                          {os.cidade}/{os.estado}
-                        </span>
-                      ) : '-'}
-                    </td>
-                    <td className="px-4 py-3">
-                      {os.equipe ? (
-                        <span className="flex items-center gap-2">
-                          <div 
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: os.equipe.cor }}
-                          />
-                          <span className="text-sm text-gray-600">{os.equipe.nome}</span>
-                        </span>
-                      ) : (
-                        <span className="text-sm text-gray-400">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        os.status === 'agendada' ? 'bg-blue-100 text-blue-700' :
-                        os.status === 'confirmada' ? 'bg-cyan-100 text-cyan-700' :
-                        os.status === 'em_execucao' ? 'bg-yellow-100 text-yellow-700' :
-                        os.status === 'concluida' ? 'bg-green-100 text-green-700' :
-                        os.status === 'cancelada' ? 'bg-red-100 text-red-700' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        {os.status === 'agendada' ? 'Agendada' :
-                         os.status === 'confirmada' ? 'Confirmada' :
-                         os.status === 'em_execucao' ? 'Em Execução' :
-                         os.status === 'concluida' ? 'Concluída' :
-                         os.status === 'cancelada' ? 'Cancelada' :
-                         os.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <p className="text-xs text-gray-500 mt-3">* OS com equipe designada usam a cor da equipe • Clique no dia para expandir</p>
       </div>
     </div>
   )

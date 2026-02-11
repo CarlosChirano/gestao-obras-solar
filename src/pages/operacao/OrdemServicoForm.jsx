@@ -84,6 +84,7 @@ const OrdemServicoForm = () => {
     latitude: '',
     longitude: '',
     valor_total: '',
+    valor_cobrado: '',
     valor_mao_obra: '',
     valor_materiais: '',
     valor_deslocamento: '',
@@ -289,6 +290,7 @@ const OrdemServicoForm = () => {
         latitude: os.latitude || '',
         longitude: os.longitude || '',
         valor_total: formatMoneyFromDB(os.valor_total),
+        valor_cobrado: formatMoneyFromDB(os.valor_cobrado),
         valor_mao_obra: os.valor_mao_obra || '',
         valor_materiais: formatMoneyFromDB(os.valor_materiais),
         valor_deslocamento: formatMoneyFromDB(os.valor_deslocamento),
@@ -1034,6 +1036,7 @@ const OrdemServicoForm = () => {
         latitude: formData.latitude ? parseFloat(formData.latitude) : null,
         longitude: formData.longitude ? parseFloat(formData.longitude) : null,
         valor_total: parseMoney(formData.valor_total) || totalServicos,
+        valor_cobrado: parseMoney(formData.valor_cobrado) || null,
         valor_mao_obra: totalMaoObra,
         valor_materiais: parseMoney(formData.valor_materiais) || 0,
         valor_deslocamento: parseMoney(formData.valor_deslocamento) || 0,
@@ -1515,6 +1518,64 @@ const OrdemServicoForm = () => {
                     </p>
                   </div>
                 )}
+
+                {/* Campo Valor Cobrado */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-white rounded-xl border-2 border-blue-200">
+                  <div>
+                    <label className="label">Valor Sugerido (Tabela)</label>
+                    <input
+                      type="text"
+                      value={formData.valor_total}
+                      readOnly
+                      className="input-field bg-gray-50 cursor-not-allowed"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Baseado na tabela de preços por kWp</p>
+                  </div>
+                  <div>
+                    <label className="label font-semibold text-blue-700">Valor Cobrado do Cliente</label>
+                    <input
+                      type="text"
+                      name="valor_cobrado"
+                      value={formData.valor_cobrado}
+                      onChange={handleChange}
+                      placeholder="Ex: 2.500,00"
+                      className="input-field border-blue-300 focus:border-blue-500 focus:ring-blue-500"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Valor efetivamente cobrado (pode ser diferente da sugestão)</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Valor Cobrado sem sugestão */}
+            {!sugestaoPreco && (
+              <div className="card">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">💰 Valores da OS</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="label">Valor Total (Sugerido)</label>
+                    <input
+                      type="text"
+                      name="valor_total"
+                      value={formData.valor_total}
+                      onChange={handleChange}
+                      placeholder="Ex: 1.760,00"
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <label className="label font-semibold text-blue-700">Valor Cobrado do Cliente</label>
+                    <input
+                      type="text"
+                      name="valor_cobrado"
+                      value={formData.valor_cobrado}
+                      onChange={handleChange}
+                      placeholder="Ex: 2.500,00"
+                      className="input-field border-blue-300 focus:border-blue-500 focus:ring-blue-500"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">Se diferente do valor sugerido</p>
+                  </div>
+                </div>
               </div>
             )}
 

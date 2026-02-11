@@ -542,13 +542,25 @@ const OrdensServico = () => {
 
                       {/* Valor Total (Faturamento) */}
                       <div className="text-right border-l pl-6">
-                        <p className="text-xs text-gray-500">Valor Total</p>
-                        <p className="font-bold text-lg text-green-600">
+                        <p className="text-xs text-gray-500">Valor Sugerido</p>
+                        <p className="font-medium text-sm text-gray-500">
                           {formatCurrency(os.valor_total)}
                         </p>
-                        {os.valor_total > 0 && custos.custoTotal > 0 && (
-                          <p className={`text-xs font-medium ${os.valor_total > custos.custoTotal ? 'text-green-600' : 'text-red-600'}`}>
-                            Margem: {formatCurrency(os.valor_total - custos.custoTotal)}
+                        {(os.valor_cobrado && os.valor_cobrado !== os.valor_total) ? (
+                          <>
+                            <p className="text-xs text-blue-600 font-semibold mt-1">Valor Cobrado</p>
+                            <p className="font-bold text-lg text-green-600">
+                              {formatCurrency(os.valor_cobrado)}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="font-bold text-lg text-green-600 mt-0.5">
+                            {formatCurrency(os.valor_cobrado || os.valor_total)}
+                          </p>
+                        )}
+                        {(os.valor_cobrado || os.valor_total) > 0 && custos.custoTotal > 0 && (
+                          <p className={`text-xs font-medium ${(os.valor_cobrado || os.valor_total) > custos.custoTotal ? 'text-green-600' : 'text-red-600'}`}>
+                            Margem: {formatCurrency((os.valor_cobrado || os.valor_total) - custos.custoTotal)}
                           </p>
                         )}
                       </div>

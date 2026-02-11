@@ -119,7 +119,7 @@ const Relatorios = () => {
       // Query simples
       const { data: ordens, error } = await supabase
         .from('ordens_servico')
-        .select('id, numero_os, data_agendamento, status, valor_total, quantidade_placas, tipo_telhado, potencia_kwp, endereco, cidade, cliente_id, equipe_id, custo_previsto')
+        .select('id, numero_os, data_agendamento, status, valor_total, valor_cobrado, quantidade_placas, tipo_telhado, potencia_kwp, endereco, cidade, cliente_id, equipe_id, custo_previsto')
         .gte('data_agendamento', dataInicio)
         .lte('data_agendamento', dataFim)
         .order('data_agendamento', { ascending: false })
@@ -159,10 +159,10 @@ const Relatorios = () => {
         .select('ordem_servico_id, colaborador_id, valor_total, dias_trabalhados')
         .in('ordem_servico_id', osIds)
 
-      // Buscar veículos
+      // Buscar veículos (campos individuais, mesma lógica da listagem)
       const { data: veiculos } = await supabase
         .from('os_veiculos')
-        .select('ordem_servico_id, valor_total')
+        .select('ordem_servico_id, valor_aluguel, valor_gasolina, valor_gelo, valor_cafe, dias, valor_total')
         .in('ordem_servico_id', osIds)
 
       console.log('📊 Colaboradores:', colaboradores?.length || 0, 'Veículos:', veiculos?.length || 0)
@@ -213,19 +213,15 @@ const Relatorios = () => {
 
     // Processar cada OS
     const osProcessadas = ordens.map(os => {
-      // Custo mão de obra COM RATEIO
+      // Custo mão de obra SEM RATEIO (mesma lógica da listagem)
       const colabs = colaboradoresPorOS[os.id] || []
-      let custoMaoObra = 0
-      colabs.forEach(c => {
-        const valorTotal = parseFloat(c.valor_total) || 0
-        const keyColab = `${c.colaborador_id}_${os.data_agendamento}`
-        const qtdOSColabDia = colaboradoresPorData[keyColab]?.length || 1
-        custoMaoObra += valorTotal / qtdOSColabDia
-      })
+      let custoMaoObra = colabs.reduce((sum, c) => sum + (parseFloat(c.valor_total) || 0), 0)
 
-      // Custo veículos
+      // Custo veículos (soma campos individuais, mesma lógica da listagem)
       const veics = veiculosPorOS[os.id] || []
-      const custoVeiculo = veics.reduce((sum, v) => sum + (parseFloat(v.valor_total) || 0), 0)
+      const custoVeiculo = veics.reduce((sum, v) => {
+        return sum + (parseFloat(v.valor_aluguel) || 0) + (parseFloat(v.valor_gasolina) || 0) + (parseFloat(v.valor_gelo) || 0) + (parseFloat(v.valor_cafe) || 0)
+      }, 0)
 
       const custoTotal = custoMaoObra + custoVeiculo
       const receita = parseFloat(os.valor_total) || 0
