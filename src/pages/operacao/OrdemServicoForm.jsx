@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DiarioObra from './DiarioObra'
+import { useAuth } from '../../contexts/AuthContext'
 
 // ============================================
 // MÁSCARA DE MOEDA - R$ 0.000.000,00
@@ -58,6 +59,10 @@ const OrdemServicoForm = () => {
   const { id } = useParams()
   const isEditing = !!id
   const queryClient = useQueryClient()
+  const { user, userProfile } = useAuth()
+
+  const usuarioNome = userProfile?.nome || user?.email || 'Usuário'
+  const usuarioId = user?.id || null
 
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(false)
@@ -208,7 +213,8 @@ const OrdemServicoForm = () => {
         .from('faixas_preco_venda')
         .select('*')
         .eq('ativo', true)
-        .order('kwp_min')
+        .not('placas_min', 'is', null)
+        .order('placas_min')
       return data
     }
   })
@@ -221,7 +227,8 @@ const OrdemServicoForm = () => {
         .from('faixas_preco_custo')
         .select('*')
         .eq('ativo', true)
-        .order('kwp_min')
+        .not('placas_min', 'is', null)
+        .order('placas_min')
       return data
     }
   })
@@ -406,8 +413,8 @@ const OrdemServicoForm = () => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
     
-    // Se mudou a potência, buscar sugestão de preço
-    if (name === 'potencia_kwp') {
+    // Se mudou a quantidade de placas, buscar sugestão de preço
+    if (name === 'quantidade_placas') {
       buscarSugestaoPreco(value)
     }
   }
@@ -486,28 +493,33 @@ const OrdemServicoForm = () => {
   }
 
   // Buscar sugestão de preço baseado na potência
-  const buscarSugestaoPreco = (potencia) => {
-    if (!potencia || potencia <= 0 || !faixasVenda || !faixasCusto) {
+  const buscarSugestaoPreco = (qtdPlacas) => {
+    if (!qtdPlacas || qtdPlacas <= 0 || !faixasVenda) {
       setSugestaoPreco(null)
       return
     }
 
-    const kwp = parseFloat(potencia)
+    const qtd = parseInt(qtdPlacas)
     
-    // Buscar faixa de venda
-    const faixaVenda = faixasVenda?.find(f => kwp >= parseFloat(f.kwp_min) && kwp <= parseFloat(f.kwp_max))
-    // Buscar faixa de custo
-    const faixaCusto = faixasCusto?.find(f => kwp >= parseFloat(f.kwp_min) && kwp <= parseFloat(f.kwp_max))
+    // Buscar faixa de venda por quantidade de placas
+    const faixaVenda = faixasVenda?.find(f => qtd >= parseInt(f.placas_min) && qtd <= parseInt(f.placas_max))
+    // Buscar faixa de custo por quantidade de placas
+    const faixaCusto = faixasCusto?.find(f => qtd >= parseInt(f.placas_min) && qtd <= parseInt(f.placas_max))
 
     if (faixaVenda || faixaCusto) {
-      const valorVenda = parseFloat(faixaVenda?.valor) || 0
-      const valorCusto = parseFloat(faixaCusto?.valor) || 0
+      const valorPorPlacaVenda = parseFloat(faixaVenda?.valor_por_placa) || 0
+      const valorPorPlacaCusto = parseFloat(faixaCusto?.valor_por_placa) || 0
+      const valorVenda = qtd * valorPorPlacaVenda
+      const valorCusto = qtd * valorPorPlacaCusto
       setSugestaoPreco({
         valorVenda,
         valorCusto,
-        descricaoVenda: faixaVenda?.descricao || '',
-        descricaoCusto: faixaCusto?.descricao || '',
-        margem: valorVenda - valorCusto
+        valorPorPlacaVenda,
+        valorPorPlacaCusto,
+        descricaoVenda: faixaVenda ? `${faixaVenda.placas_min}-${faixaVenda.placas_max === 9999 ? '∞' : faixaVenda.placas_max} placas (${formatCurrency(valorPorPlacaVenda)}/placa)` : '',
+        descricaoCusto: faixaCusto ? `${faixaCusto.placas_min}-${faixaCusto.placas_max === 9999 ? '∞' : faixaCusto.placas_max} placas (${formatCurrency(valorPorPlacaCusto)}/placa)` : '',
+        margem: valorVenda - valorCusto,
+        qtdPlacas: qtd
       })
     } else {
       setSugestaoPreco(null)
@@ -525,12 +537,12 @@ const OrdemServicoForm = () => {
     }
   }
 
-  // Atualizar sugestão quando potência muda
+  // Atualizar sugestão quando quantidade de placas muda
   useEffect(() => {
-    if (formData.potencia_kwp && faixasVenda && faixasCusto) {
-      buscarSugestaoPreco(formData.potencia_kwp)
+    if (formData.quantidade_placas && faixasVenda) {
+      buscarSugestaoPreco(formData.quantidade_placas)
     }
-  }, [formData.potencia_kwp, faixasVenda, faixasCusto])
+  }, [formData.quantidade_placas, faixasVenda, faixasCusto])
 
   // Funções para Serviços
   const addServico = () => {
@@ -1053,14 +1065,78 @@ const OrdemServicoForm = () => {
         tipo_servico_solar: formData.tipo_servico_solar || null
       }
 
+      // Adicionar campos de auditoria
+      if (isEditing) {
+        osData.atualizado_por = usuarioId
+        osData.atualizado_por_nome = usuarioNome
+        osData.atualizado_em = new Date().toISOString()
+      } else {
+        osData.criado_por = usuarioId
+        osData.criado_por_nome = usuarioNome
+      }
+
       let osId = id
 
       if (isEditing) {
+        // Detectar campos alterados para log
+        const camposMonitorados = {
+          cliente_id: 'Cliente',
+          data_agendamento: 'Data de Agendamento',
+          status: 'Status',
+          equipe_id: 'Equipe',
+          valor_total: 'Valor Total',
+          valor_cobrado: 'Valor Cobrado',
+          quantidade_placas: 'Quantidade de Placas',
+          potencia_kwp: 'Potência (kWp)',
+          endereco: 'Endereço',
+          cidade: 'Cidade',
+          prioridade: 'Prioridade',
+          tipo_telhado: 'Tipo de Telhado',
+          tipo_servico_solar: 'Tipo de Serviço Solar',
+          previsao_dias: 'Previsão de Dias',
+          observacoes: 'Observações'
+        }
+
+        const alteracoes = []
+        if (ordemServicoCompleta) {
+          Object.entries(camposMonitorados).forEach(([campo, label]) => {
+            const valorAnterior = ordemServicoCompleta[campo]
+            const valorNovo = osData[campo]
+            // Comparar como string para evitar problemas de tipo
+            if (String(valorAnterior ?? '') !== String(valorNovo ?? '')) {
+              alteracoes.push({
+                ordem_servico_id: id,
+                usuario_id: usuarioId,
+                usuario_nome: usuarioNome,
+                campo_alterado: label,
+                valor_anterior: valorAnterior != null ? String(valorAnterior) : null,
+                valor_novo: valorNovo != null ? String(valorNovo) : null
+              })
+            }
+          })
+        }
+
         const { error } = await supabase
           .from('ordens_servico')
           .update(osData)
           .eq('id', id)
         if (error) throw error
+
+        // Gravar alterações no log
+        if (alteracoes.length > 0) {
+          await supabase.from('os_alteracoes_log').insert(alteracoes).catch(() => {})
+          
+          // Gravar resumo no os_historico (timeline)
+          const resumo = alteracoes.map(a => `${a.campo_alterado}: ${a.valor_anterior || '(vazio)'} → ${a.valor_novo || '(vazio)'}`).join('\n')
+          await supabase.from('os_historico').insert({
+            ordem_servico_id: id,
+            tipo: 'edicao',
+            titulo: `OS editada por ${usuarioNome}`,
+            descricao: resumo.substring(0, 500),
+            usuario_nome: usuarioNome,
+            usuario_id: usuarioId
+          }).catch(() => {})
+        }
 
         await supabase.from('os_servicos').delete().eq('ordem_servico_id', id)
         await supabase.from('os_colaboradores').delete().eq('ordem_servico_id', id)
@@ -1081,6 +1157,16 @@ const OrdemServicoForm = () => {
           .single()
         if (error) throw error
         osId = data.id
+
+        // Registrar criação no histórico
+        await supabase.from('os_historico').insert({
+          ordem_servico_id: osId,
+          tipo: 'criacao',
+          titulo: `OS criada por ${usuarioNome}`,
+          descricao: `Cliente: ${formData.cliente_id ? 'selecionado' : 'não informado'} | Placas: ${formData.quantidade_placas || 'N/A'} | Status: ${formData.status}`,
+          usuario_nome: usuarioNome,
+          usuario_id: usuarioId
+        }).catch(() => {})
       }
 
       // Inserir serviços
@@ -1474,7 +1560,7 @@ const OrdemServicoForm = () => {
                   </div>
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900">💡 Sugestão de Preço</h2>
-                    <p className="text-xs text-gray-500">Baseado na potência de {formData.potencia_kwp} kWp</p>
+                    <p className="text-xs text-gray-500">Baseado em {formData.quantidade_placas} placas</p>
                   </div>
                 </div>
                 

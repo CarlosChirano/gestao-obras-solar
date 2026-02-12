@@ -81,9 +81,10 @@ const Relatorios = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('faixas_preco_venda')
-        .select('id, kwp_min, kwp_max, valor, valor_por_kwp, descricao, ativo')
+        .select('id, placas_min, placas_max, valor_por_placa, descricao, ativo')
         .eq('ativo', true)
-        .order('kwp_min')
+        .not('placas_min', 'is', null)
+        .order('placas_min')
       
       if (error) {
         console.error('Erro ao buscar faixas:', error)
@@ -296,14 +297,14 @@ const Relatorios = () => {
       const lucro = obra.receita - obra.custo_total
       const margem = obra.receita > 0 ? (lucro / obra.receita) * 100 : 0
 
-      // Buscar preço esperado
+      // Buscar preço esperado por quantidade de placas
       let precoEsperado = null
-      if (obra.potencia_kwp && faixasPreco && faixasPreco.length > 0) {
+      if (obra.total_placas && faixasPreco && faixasPreco.length > 0) {
         const faixa = faixasPreco.find(f => 
-          obra.potencia_kwp >= f.kwp_min && obra.potencia_kwp <= f.kwp_max
+          obra.total_placas >= f.placas_min && obra.total_placas <= f.placas_max
         )
         if (faixa) {
-          precoEsperado = parseFloat(faixa.valor) || 0
+          precoEsperado = obra.total_placas * (parseFloat(faixa.valor_por_placa) || 0)
         }
       }
 

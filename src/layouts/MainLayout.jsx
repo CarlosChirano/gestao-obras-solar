@@ -83,8 +83,8 @@ const MainLayout = ({ children }) => {
   ]
 
   const precificacaoItems = [
-    { label: 'Preço Venda (kWp)', icon: TrendingUp, path: '/faixas-preco-venda' },
-    { label: 'Custo Equipe (kWp)', icon: Wallet, path: '/faixas-preco-custo' },
+    { label: 'Preço Venda (Placa)', icon: TrendingUp, path: '/faixas-preco-venda' },
+    { label: 'Custo Equipe (Placa)', icon: Wallet, path: '/faixas-preco-custo' },
     { label: 'Serviços Extras', icon: Package, path: '/servicos-extras' },
   ]
 
