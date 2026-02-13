@@ -128,7 +128,7 @@ const OrdensServico = () => {
           descricao: motivoExclusao || 'Exclusão direta por superadministrador',
           usuario_nome: usuarioNome,
           usuario_id: usuarioId
-        }).catch(() => {})
+        })
 
         return { direto: true }
       } else {

@@ -93,7 +93,7 @@ const Aprovacoes = () => {
           descricao: `Solicitado por: ${aprovacao.solicitante_nome}\nMotivo: ${aprovacao.motivo || 'Não informado'}`,
           usuario_nome: usuarioNome,
           usuario_id: usuarioId
-        }).catch(() => {})
+        })
 
       } else if (aprovacao.tipo === 'edicao') {
         if (aprovacao.dados_alteracao) {
@@ -115,7 +115,7 @@ const Aprovacoes = () => {
             descricao: `Solicitado por: ${aprovacao.solicitante_nome}\nCampos: ${Object.keys(aprovacao.dados_alteracao).join(', ')}`,
             usuario_nome: usuarioNome,
             usuario_id: usuarioId
-          }).catch(() => {})
+          })
         }
       }
     },
