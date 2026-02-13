@@ -50,6 +50,7 @@ const Dashboard = () => {
           equipe:equipes(nome, cor)
         `)
         .eq('ativo', true)
+        .or('deletado.is.null,deletado.eq.false')
         .order('data_agendamento', { ascending: true })
       if (error) throw error
       return data

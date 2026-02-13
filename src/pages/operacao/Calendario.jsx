@@ -27,6 +27,7 @@ const Calendario = () => {
           equipe:equipes(nome, cor)
         `)
         .eq('ativo', true)
+        .or('deletado.is.null,deletado.eq.false')
         .gte('data_agendamento', inicioMes.toISOString().split('T')[0])
         .lte('data_agendamento', fimMes.toISOString().split('T')[0])
         .order('data_agendamento')

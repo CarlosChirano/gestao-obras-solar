@@ -123,6 +123,8 @@ const Relatorios = () => {
         .select('id, numero_os, data_agendamento, status, valor_total, valor_cobrado, quantidade_placas, tipo_telhado, potencia_kwp, endereco, cidade, cliente_id, equipe_id, custo_previsto')
         .gte('data_agendamento', dataInicio)
         .lte('data_agendamento', dataFim)
+        .eq('ativo', true)
+        .or('deletado.is.null,deletado.eq.false')
         .order('data_agendamento', { ascending: false })
 
       if (error) {

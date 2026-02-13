@@ -70,6 +70,8 @@ const CustosEquipe = () => {
         .select('id, numero_os, data_agendamento, status, valor_total, valor_cobrado, endereco, cidade, potencia_kwp, cliente_id, equipe_id')
         .gte('data_agendamento', dataInicio)
         .lte('data_agendamento', dataFim)
+        .eq('ativo', true)
+        .or('deletado.is.null,deletado.eq.false')
         .order('data_agendamento', { ascending: false })
 
       if (!ordens || ordens.length === 0) return { ordens: [], colaboradores: [], veiculos: [], clientes: {} }
