@@ -21,7 +21,6 @@ import OrdemServicoDetalhes from './pages/operacao/OrdemServicoDetalhes'
 import Calendario from './pages/operacao/Calendario'
 import Relatorios from './pages/operacao/Relatorios'
 import DashboardCheckins from './pages/operacao/DashboardCheckins'
-import CustosEquipe from './pages/operacao/CustosEquipe'
 
 // Área do Colaborador (Mobile)
 import ColaboradorLogin from './pages/colaborador/ColaboradorLogin'
@@ -56,6 +55,7 @@ import PlanoContas from './pages/financeiro/PlanoContas'
 import Usuarios from './pages/usuarios/Usuarios'
 import UsuarioForm from './pages/usuarios/UsuarioForm'
 import PerfisAcesso from './pages/usuarios/PerfisAcesso'
+import Aprovacoes from './pages/operacao/Aprovacoes'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -167,16 +167,17 @@ function App() {
               </PrivateRoute>
             } />
 
-            <Route path="/custos-equipe" element={
-              <PrivateRoute>
-                <CustosEquipe />
-              </PrivateRoute>
-            } />
-
             {/* Check-ins (Controle de Presença) */}
             <Route path="/checkins" element={
               <PrivateRoute>
                 <DashboardCheckins />
+              </PrivateRoute>
+            } />
+
+            {/* Aprovações */}
+            <Route path="/aprovacoes" element={
+              <PrivateRoute>
+                <Aprovacoes />
               </PrivateRoute>
             } />
 

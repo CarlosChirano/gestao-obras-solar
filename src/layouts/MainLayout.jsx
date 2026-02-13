@@ -75,6 +75,11 @@ const MainLayout = ({ children }) => {
       icon: Banknote, 
       path: '/custos-equipe' 
     },
+    { 
+      label: 'Aprovações', 
+      icon: ShieldCheck, 
+      path: '/aprovacoes' 
+    },
   ]
 
   const financeiroItems = [

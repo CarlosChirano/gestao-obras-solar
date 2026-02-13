@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../lib/supabase'
-import { Plus, Search, Filter, Loader2, ClipboardList, Calendar, MapPin, Users, Eye, ChevronDown, DollarSign, Car, Snowflake, Coffee, Trash2, RotateCcw, X, EyeOff } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
+import { Plus, Search, Filter, Loader2, ClipboardList, Calendar, MapPin, Users, Eye, ChevronDown, DollarSign, Car, Snowflake, Coffee, Trash2, RotateCcw, X, EyeOff, ShieldCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const OrdensServico = () => {
@@ -11,8 +12,13 @@ const OrdensServico = () => {
   const [showFilters, setShowFilters] = useState(false)
   const [mostrarDeletados, setMostrarDeletados] = useState(false)
   const [deleteModal, setDeleteModal] = useState({ open: false, os: null })
+  const [motivoExclusao, setMotivoExclusao] = useState('')
   const [dataInicio, setDataInicio] = useState('')
   const [dataFim, setDataFim] = useState('')
+
+  const { user, userProfile, isSuperAdmin } = useAuth()
+  const usuarioNome = userProfile?.nome || user?.email || 'Usuário'
+  const usuarioId = user?.id || null
   const queryClient = useQueryClient()
 
   const { data: ordens, isLoading, error: queryError } = useQuery({
@@ -99,22 +105,63 @@ const OrdensServico = () => {
     }
   })
 
-  // Mutation para deletar (soft delete)
+  // Mutation para deletar (soft delete) - SuperAdmin executa direto, outros solicitam
   const deleteMutation = useMutation({
-    mutationFn: async (osId) => {
-      const { error } = await supabase
-        .from('ordens_servico')
-        .update({ deletado: true })
-        .eq('id', osId)
-      if (error) throw error
+    mutationFn: async (os) => {
+      if (isSuperAdmin) {
+        // SuperAdmin: exclui direto
+        const { error } = await supabase
+          .from('ordens_servico')
+          .update({ 
+            deletado: true,
+            atualizado_por: usuarioId,
+            atualizado_por_nome: `Excluída por ${usuarioNome}`,
+            atualizado_em: new Date().toISOString()
+          })
+          .eq('id', os.id)
+        if (error) throw error
+
+        await supabase.from('os_historico').insert({
+          ordem_servico_id: os.id,
+          tipo: 'status',
+          titulo: `OS excluída por ${usuarioNome} (SuperAdmin)`,
+          descricao: motivoExclusao || 'Exclusão direta por superadministrador',
+          usuario_nome: usuarioNome,
+          usuario_id: usuarioId
+        }).catch(() => {})
+
+        return { direto: true }
+      } else {
+        // Usuário comum: cria solicitação de exclusão
+        const { error } = await supabase
+          .from('os_aprovacoes')
+          .insert({
+            ordem_servico_id: os.id,
+            tipo: 'exclusao',
+            solicitante_id: usuarioId,
+            solicitante_nome: usuarioNome,
+            motivo: motivoExclusao || 'Solicitação de exclusão',
+            numero_os: os.numero_os || os.id?.slice(0, 8),
+            cliente_nome: os.cliente?.nome || 'N/A'
+          })
+        if (error) throw error
+
+        return { direto: false }
+      }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries(['ordens-servico'])
-      toast.success('OS removida com sucesso')
+      queryClient.invalidateQueries(['aprovacoes-contadores'])
+      if (result.direto) {
+        toast.success('OS removida com sucesso')
+      } else {
+        toast.success('Solicitação de exclusão enviada para aprovação!')
+      }
       setDeleteModal({ open: false, os: null })
+      setMotivoExclusao('')
     },
     onError: (error) => {
-      toast.error('Erro ao remover: ' + error.message)
+      toast.error('Erro: ' + error.message)
     }
   })
 
@@ -542,25 +589,13 @@ const OrdensServico = () => {
 
                       {/* Valor Total (Faturamento) */}
                       <div className="text-right border-l pl-6">
-                        <p className="text-xs text-gray-500">Valor Sugerido</p>
-                        <p className="font-medium text-sm text-gray-500">
+                        <p className="text-xs text-gray-500">Valor Total</p>
+                        <p className="font-bold text-lg text-green-600">
                           {formatCurrency(os.valor_total)}
                         </p>
-                        {(os.valor_cobrado && os.valor_cobrado !== os.valor_total) ? (
-                          <>
-                            <p className="text-xs text-blue-600 font-semibold mt-1">Valor Cobrado</p>
-                            <p className="font-bold text-lg text-green-600">
-                              {formatCurrency(os.valor_cobrado)}
-                            </p>
-                          </>
-                        ) : (
-                          <p className="font-bold text-lg text-green-600 mt-0.5">
-                            {formatCurrency(os.valor_cobrado || os.valor_total)}
-                          </p>
-                        )}
-                        {(os.valor_cobrado || os.valor_total) > 0 && custos.custoTotal > 0 && (
-                          <p className={`text-xs font-medium ${(os.valor_cobrado || os.valor_total) > custos.custoTotal ? 'text-green-600' : 'text-red-600'}`}>
-                            Margem: {formatCurrency((os.valor_cobrado || os.valor_total) - custos.custoTotal)}
+                        {os.valor_total > 0 && custos.custoTotal > 0 && (
+                          <p className={`text-xs font-medium ${os.valor_total > custos.custoTotal ? 'text-green-600' : 'text-red-600'}`}>
+                            Margem: {formatCurrency(os.valor_total - custos.custoTotal)}
                           </p>
                         )}
                       </div>
@@ -611,46 +646,78 @@ const OrdensServico = () => {
           <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
             <div className="flex items-center justify-between p-6 border-b">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                  <Trash2 className="w-5 h-5 text-red-600" />
+                <div className={`w-10 h-10 ${isSuperAdmin ? 'bg-red-100' : 'bg-amber-100'} rounded-full flex items-center justify-center`}>
+                  {isSuperAdmin 
+                    ? <Trash2 className="w-5 h-5 text-red-600" />
+                    : <ShieldCheck className="w-5 h-5 text-amber-600" />
+                  }
                 </div>
-                <h2 className="text-lg font-semibold text-gray-900">Remover OS</h2>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {isSuperAdmin ? 'Remover OS' : 'Solicitar Exclusão'}
+                </h2>
               </div>
-              <button onClick={() => setDeleteModal({ open: false, os: null })} className="p-2 hover:bg-gray-100 rounded-lg">
+              <button onClick={() => { setDeleteModal({ open: false, os: null }); setMotivoExclusao('') }} className="p-2 hover:bg-gray-100 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
             
-            <div className="p-6">
+            <div className="p-6 space-y-4">
               <p className="text-gray-600">
-                Tem certeza que deseja remover a OS <strong>#{deleteModal.os?.numero_os || deleteModal.os?.id?.slice(0, 8)}</strong>?
+                {isSuperAdmin 
+                  ? <>Tem certeza que deseja remover a OS <strong>#{deleteModal.os?.numero_os || deleteModal.os?.id?.slice(0, 8)}</strong>?</>
+                  : <>Solicitar exclusão da OS <strong>#{deleteModal.os?.numero_os || deleteModal.os?.id?.slice(0, 8)}</strong>?</>
+                }
               </p>
-              <p className="text-sm text-gray-500 mt-2">
+              <p className="text-sm text-gray-500">
                 Cliente: <strong>{deleteModal.os?.cliente?.nome}</strong>
               </p>
-              <p className="text-sm text-gray-500 mt-3 p-3 bg-yellow-50 rounded-lg">
-                ⚠️ A OS não será excluída permanentemente e poderá ser restaurada depois.
-              </p>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Motivo {!isSuperAdmin && <span className="text-red-500">*</span>}
+                </label>
+                <input
+                  type="text"
+                  value={motivoExclusao}
+                  onChange={(e) => setMotivoExclusao(e.target.value)}
+                  placeholder="Informe o motivo da exclusão..."
+                  className="input-field w-full"
+                />
+              </div>
+
+              {isSuperAdmin ? (
+                <p className="text-sm text-gray-500 p-3 bg-yellow-50 rounded-lg">
+                  ⚠️ Como superadmin, a OS será excluída imediatamente (soft delete, pode restaurar).
+                </p>
+              ) : (
+                <p className="text-sm text-gray-500 p-3 bg-blue-50 rounded-lg">
+                  🔒 A solicitação será enviada para aprovação de um superadministrador.
+                </p>
+              )}
             </div>
 
             <div className="flex gap-3 p-6 border-t bg-gray-50 rounded-b-2xl">
               <button
-                onClick={() => setDeleteModal({ open: false, os: null })}
+                onClick={() => { setDeleteModal({ open: false, os: null }); setMotivoExclusao('') }}
                 className="btn-secondary flex-1"
               >
                 Cancelar
               </button>
               <button
-                onClick={() => deleteMutation.mutate(deleteModal.os?.id)}
-                disabled={deleteMutation.isPending}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                onClick={() => deleteMutation.mutate(deleteModal.os)}
+                disabled={deleteMutation.isPending || (!isSuperAdmin && !motivoExclusao.trim())}
+                className={`flex-1 px-4 py-2 text-white rounded-lg disabled:opacity-50 flex items-center justify-center gap-2 ${
+                  isSuperAdmin ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-600 hover:bg-amber-700'
+                }`}
               >
                 {deleteMutation.isPending ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
+                ) : isSuperAdmin ? (
                   <Trash2 className="w-4 h-4" />
+                ) : (
+                  <ShieldCheck className="w-4 h-4" />
                 )}
-                Remover
+                {isSuperAdmin ? 'Remover' : 'Solicitar Exclusão'}
               </button>
             </div>
           </div>

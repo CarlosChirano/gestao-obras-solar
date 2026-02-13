@@ -21,19 +21,14 @@ export const AuthProvider = ({ children }) => {
 
     const getSession = async () => {
       try {
-        // Timeout de 5 segundos para não ficar carregando infinitamente
         const timeoutPromise = new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Timeout')), 5000)
         )
-
         const sessionPromise = supabase.auth.getSession()
-
         const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise])
         
         if (mounted) {
           setUser(session?.user ?? null)
-          
-          // Carrega perfil em background, não bloqueia o loading
           if (session?.user) {
             loadUserProfile(session.user.id)
           }
@@ -41,7 +36,6 @@ export const AuthProvider = ({ children }) => {
       } catch (error) {
         console.error('Erro ao verificar sessão:', error)
       } finally {
-        // SEMPRE seta loading false, independente de erro
         if (mounted) {
           setLoading(false)
         }
@@ -52,16 +46,13 @@ export const AuthProvider = ({ children }) => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event)
-      
       if (mounted) {
         setUser(session?.user ?? null)
-        
         if (session?.user) {
           loadUserProfile(session.user.id)
         } else {
           setUserProfile(null)
         }
-        
         setLoading(false)
       }
     })
@@ -74,6 +65,7 @@ export const AuthProvider = ({ children }) => {
 
   const loadUserProfile = async (authId) => {
     try {
+      // Tentar buscar de 'usuarios' primeiro (tabela original)
       const { data, error } = await supabase
         .from('usuarios')
         .select('*, perfil:perfis(*)')
@@ -82,14 +74,26 @@ export const AuthProvider = ({ children }) => {
       
       if (error) {
         console.warn('Tabela usuarios não encontrada ou erro:', error.message)
-        // Se não tem tabela usuarios, usa os dados do auth
-        return
       }
-      
-      setUserProfile(data)
+
+      // Buscar também o colaborador vinculado para pegar o perfil_acesso com is_admin
+      const { data: colaborador } = await supabase
+        .from('colaboradores')
+        .select('id, nome, perfil_id, perfil:perfis_acesso(id, nome, is_admin)')
+        .eq('email', (await supabase.auth.getUser()).data?.user?.email)
+        .maybeSingle()
+
+      const profile = {
+        ...(data || {}),
+        nome: data?.nome || colaborador?.nome || null,
+        colaborador_id: colaborador?.id || null,
+        is_admin: colaborador?.perfil?.is_admin || false,
+        perfil_acesso: colaborador?.perfil || null
+      }
+
+      setUserProfile(profile)
     } catch (err) {
       console.warn('Erro ao carregar perfil (ignorado):', err)
-      // Não bloqueia se der erro - perfil é opcional
     }
   }
 
@@ -107,7 +111,6 @@ export const AuthProvider = ({ children }) => {
     })
     if (error) throw error
 
-    // Tenta criar registro na tabela usuarios (se existir)
     if (data.user) {
       try {
         const { data: perfis } = await supabase
@@ -126,7 +129,6 @@ export const AuthProvider = ({ children }) => {
         }
       } catch (err) {
         console.warn('Não foi possível criar perfil de usuário:', err)
-        // Continua mesmo sem criar - o login ainda funciona
       }
     }
     return data
@@ -144,10 +146,14 @@ export const AuthProvider = ({ children }) => {
     if (error) throw error
   }
 
+  // Helper: verificar se é superadmin
+  const isSuperAdmin = userProfile?.is_admin === true
+
   const value = {
     user,
     userProfile,
     loading,
+    isSuperAdmin,
     signIn,
     signUp,
     signOut,
