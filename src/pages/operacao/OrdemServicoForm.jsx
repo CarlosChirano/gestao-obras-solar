@@ -1124,7 +1124,7 @@ const OrdemServicoForm = () => {
 
         // Gravar alterações no log
         if (alteracoes.length > 0) {
-          await supabase.from('os_alteracoes_log').insert(alteracoes).catch(() => {})
+          try { await supabase.from('os_alteracoes_log').insert(alteracoes) } catch(e) {}
           
           // Gravar resumo no os_historico (timeline)
           const resumo = alteracoes.map(a => `${a.campo_alterado}: ${a.valor_anterior || '(vazio)'} → ${a.valor_novo || '(vazio)'}`).join('\n')
@@ -1135,7 +1135,7 @@ const OrdemServicoForm = () => {
             descricao: resumo.substring(0, 500),
             usuario_nome: usuarioNome,
             usuario_id: usuarioId
-          }).catch(() => {})
+          })
         }
 
         await supabase.from('os_servicos').delete().eq('ordem_servico_id', id)
@@ -1166,7 +1166,7 @@ const OrdemServicoForm = () => {
           descricao: `Cliente: ${formData.cliente_id ? 'selecionado' : 'não informado'} | Placas: ${formData.quantidade_placas || 'N/A'} | Status: ${formData.status}`,
           usuario_nome: usuarioNome,
           usuario_id: usuarioId
-        }).catch(() => {})
+        })
       }
 
       // Inserir serviços
