@@ -1030,6 +1030,13 @@ const OrdemServicoForm = () => {
       return
     }
 
+    // Validar se tem pelo menos 1 colaborador com ID válido
+    const colaboradoresValidos = colaboradores.filter(c => c.colaborador_id)
+    if (colaboradoresValidos.length === 0) {
+      toast.error('Adicione pelo menos um colaborador na aba "Equipe" antes de salvar a OS')
+      return
+    }
+
     setLoading(true)
 
     try {
