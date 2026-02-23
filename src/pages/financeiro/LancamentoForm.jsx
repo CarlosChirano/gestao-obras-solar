@@ -133,7 +133,7 @@ const SearchableSelect = ({
               setSearch('')
             }}
           />
-          <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-72 overflow-hidden">
+          <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-2xl shadow-lg max-h-72 overflow-hidden">
             {/* Campo de busca */}
             <div className="p-2 border-b">
               <div className="relative">
@@ -143,7 +143,7 @@ const SearchableSelect = ({
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={searchPlaceholder}
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                   autoFocus
                 />
                 {search && (

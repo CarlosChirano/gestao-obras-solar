@@ -121,8 +121,8 @@ const MainLayout = ({ children }) => {
       {/* Mobile Header */}
       <div className="lg:hidden bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Sun className="w-8 h-8 text-yellow-500" />
-          <span className="font-bold text-gray-900">SolarSync</span>
+          <Sun className="w-8 h-8 text-orange-500" />
+          <span className="font-bold text-orange-600">SolarSync</span>
         </div>
         <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2">
           {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -131,7 +131,7 @@ const MainLayout = ({ children }) => {
 
       {/* Sidebar */}
       <aside className={`
-        fixed top-0 left-0 z-40 h-full w-64 bg-white border-r border-gray-200 
+        fixed top-0 left-0 z-40 h-full w-64 bg-white shadow-sm
         transform transition-transform duration-200 ease-in-out
         lg:translate-x-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
@@ -139,9 +139,9 @@ const MainLayout = ({ children }) => {
         {/* Logo */}
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center gap-2">
-            <Sun className="w-8 h-8 text-yellow-500" />
+            <Sun className="w-8 h-8 text-orange-500" />
             <div>
-              <h1 className="font-bold text-gray-900">SolarSync</h1>
+              <h1 className="font-bold text-orange-600">SolarSync</h1>
               <p className="text-xs text-gray-500">Gestão de Obras Solares</p>
             </div>
           </div>
@@ -154,13 +154,13 @@ const MainLayout = ({ children }) => {
               key={item.path}
               to={item.path}
               onClick={() => setSidebarOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+              className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-colors ${
                 isActive(item.path)
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? 'bg-orange-50 text-orange-600'
+                  : 'text-gray-700 hover:bg-gray-50/80'
               }`}
             >
-              <item.icon className="w-5 h-5" />
+              <item.icon className="w-[18px] h-[18px]" />
               <span className="font-medium">{item.label}</span>
             </Link>
           ))}
@@ -169,7 +169,7 @@ const MainLayout = ({ children }) => {
           <div className="pt-4">
             <button
               onClick={() => setFinanceiroOpen(!financeiroOpen)}
-              className="flex items-center justify-between w-full px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+              className="flex items-center justify-between w-full px-3 py-2 text-gray-700 hover:bg-gray-50/80 rounded-xl"
             >
               <span className="font-medium text-sm text-gray-500 uppercase">Financeiro</span>
               <ChevronDown className={`w-4 h-4 transition-transform ${financeiroOpen ? 'rotate-180' : ''}`} />
@@ -182,10 +182,10 @@ const MainLayout = ({ children }) => {
                     key={item.path}
                     to={item.path}
                     onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center gap-3 px-3 py-2 pl-6 rounded-lg transition-colors ${
+                    className={`flex items-center gap-3 px-3 py-2 pl-6 rounded-xl transition-colors ${
                       isActive(item.path)
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-600 hover:bg-gray-100'
+                        ? 'bg-orange-50 text-orange-600'
+                        : 'text-gray-600 hover:bg-gray-50/80'
                     }`}
                   >
                     <item.icon className="w-4 h-4" />
@@ -200,7 +200,7 @@ const MainLayout = ({ children }) => {
           <div className="pt-4">
             <button
               onClick={() => setPrecificacaoOpen(!precificacaoOpen)}
-              className="flex items-center justify-between w-full px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+              className="flex items-center justify-between w-full px-3 py-2 text-gray-700 hover:bg-gray-50/80 rounded-xl"
             >
               <span className="font-medium text-sm text-gray-500 uppercase">Precificação</span>
               <ChevronDown className={`w-4 h-4 transition-transform ${precificacaoOpen ? 'rotate-180' : ''}`} />
@@ -213,10 +213,10 @@ const MainLayout = ({ children }) => {
                     key={item.path}
                     to={item.path}
                     onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center gap-3 px-3 py-2 pl-6 rounded-lg transition-colors ${
+                    className={`flex items-center gap-3 px-3 py-2 pl-6 rounded-xl transition-colors ${
                       isActive(item.path)
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-600 hover:bg-gray-100'
+                        ? 'bg-orange-50 text-orange-600'
+                        : 'text-gray-600 hover:bg-gray-50/80'
                     }`}
                   >
                     <item.icon className="w-4 h-4" />
@@ -231,7 +231,7 @@ const MainLayout = ({ children }) => {
           <div className="pt-4">
             <button
               onClick={() => setCadastrosOpen(!cadastrosOpen)}
-              className="flex items-center justify-between w-full px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+              className="flex items-center justify-between w-full px-3 py-2 text-gray-700 hover:bg-gray-50/80 rounded-xl"
             >
               <span className="font-medium text-sm text-gray-500 uppercase">Cadastros</span>
               <ChevronDown className={`w-4 h-4 transition-transform ${cadastrosOpen ? 'rotate-180' : ''}`} />
@@ -244,10 +244,10 @@ const MainLayout = ({ children }) => {
                     key={item.path}
                     to={item.path}
                     onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center gap-3 px-3 py-2 pl-6 rounded-lg transition-colors ${
+                    className={`flex items-center gap-3 px-3 py-2 pl-6 rounded-xl transition-colors ${
                       isActive(item.path)
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-600 hover:bg-gray-100'
+                        ? 'bg-orange-50 text-orange-600'
+                        : 'text-gray-600 hover:bg-gray-50/80'
                     }`}
                   >
                     <item.icon className="w-4 h-4" />
@@ -265,13 +265,13 @@ const MainLayout = ({ children }) => {
               <Link
                 to="/usuarios"
                 onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-colors ${
                   isActive('/usuarios')
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    ? 'bg-orange-50 text-orange-600'
+                    : 'text-gray-600 hover:bg-gray-50/80'
                 }`}
               >
-                <ShieldCheck className="w-5 h-5" />
+                <ShieldCheck className="w-[18px] h-[18px]" />
                 <span className="font-medium">Usuários</span>
               </Link>
             </div>
@@ -282,8 +282,8 @@ const MainLayout = ({ children }) => {
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-blue-700 font-medium text-sm">
+              <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-orange-700 font-medium text-sm">
                   {userProfile?.nome?.[0] || user?.email?.[0]?.toUpperCase() || 'U'}
                 </span>
               </div>
@@ -296,7 +296,7 @@ const MainLayout = ({ children }) => {
             </div>
             <button
               onClick={handleLogout}
-              className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg"
+              className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl"
               title="Sair"
             >
               <LogOut className="w-4 h-4" />
@@ -325,7 +325,7 @@ const MainLayout = ({ children }) => {
             }
           }
         `}</style>
-        <div className="p-4 lg:p-6">
+        <div className="p-5 lg:p-8">
           {children}
         </div>
       </main>

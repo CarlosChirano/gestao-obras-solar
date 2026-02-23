@@ -259,7 +259,7 @@ const SelectConta = ({ value, onChange, tipo = null, label = "Plano de Contas", 
           />
           
           {/* Lista */}
-          <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-80 overflow-hidden">
+          <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-2xl shadow-lg max-h-80 overflow-hidden">
             {/* Busca */}
             <div className="p-2 border-b">
               <div className="relative">
@@ -269,7 +269,7 @@ const SelectConta = ({ value, onChange, tipo = null, label = "Plano de Contas", 
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar conta..."
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                   autoFocus
                 />
               </div>

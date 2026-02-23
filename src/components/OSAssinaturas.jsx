@@ -145,7 +145,7 @@ const OSAssinaturas = ({ ordemServicoId }) => {
       {/* Cards de Assinatura */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Assinatura do Cliente */}
-        <div className="border border-gray-200 rounded-xl p-4">
+        <div className="border border-gray-200 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
               <User className="w-4 h-4 text-blue-600" />
@@ -200,7 +200,7 @@ const OSAssinaturas = ({ ordemServicoId }) => {
           ) : (
             <button
               onClick={() => openSignaturePad('cliente')}
-              className="w-full py-8 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+              className="w-full py-8 border-2 border-dashed border-gray-200 rounded-xl text-gray-500 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
             >
               <PenTool className="w-6 h-6 mx-auto mb-2" />
               <p className="font-medium">Coletar Assinatura</p>
@@ -210,7 +210,7 @@ const OSAssinaturas = ({ ordemServicoId }) => {
         </div>
 
         {/* Assinatura do Técnico */}
-        <div className="border border-gray-200 rounded-xl p-4">
+        <div className="border border-gray-200 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
               <HardHat className="w-4 h-4 text-orange-600" />
@@ -265,7 +265,7 @@ const OSAssinaturas = ({ ordemServicoId }) => {
           ) : (
             <button
               onClick={() => openSignaturePad('tecnico')}
-              className="w-full py-8 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-orange-500 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+              className="w-full py-8 border-2 border-dashed border-gray-200 rounded-xl text-gray-500 hover:border-orange-500 hover:text-orange-600 hover:bg-orange-50 transition-colors"
             >
               <PenTool className="w-6 h-6 mx-auto mb-2" />
               <p className="font-medium">Coletar Assinatura</p>

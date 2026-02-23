@@ -97,13 +97,13 @@ const RelatoriosObra = () => {
             placeholder="Buscar por cliente, OS ou responsável..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
         <select
           value={filtroTipo}
           onChange={(e) => setFiltroTipo(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
+          className="px-3 py-2 border border-gray-200 rounded-xl text-sm"
         >
           <option value="">Todos os tipos</option>
           <option value="pre_obra">Pré-Obra</option>
@@ -112,7 +112,7 @@ const RelatoriosObra = () => {
         <select
           value={filtroStatus}
           onChange={(e) => setFiltroStatus(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm"
+          className="px-3 py-2 border border-gray-200 rounded-xl text-sm"
         >
           <option value="">Todos os status</option>
           <option value="rascunho">Rascunho</option>
@@ -144,7 +144,7 @@ const RelatoriosObra = () => {
               <div
                 key={rel.id}
                 onClick={() => navigate(`/relatorio-obra/${rel.id}`)}
-                className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer"
+                className="bg-white border border-gray-200 rounded-2xl p-4 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">

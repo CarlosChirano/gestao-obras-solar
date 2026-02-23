@@ -217,7 +217,7 @@ const OSAnexos = ({ ordemServicoId, readOnly = false }) => {
           {anexos?.map((anexo) => (
             <div
               key={anexo.id}
-              className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+              className="bg-white border border-gray-200 rounded-2xl p-4 hover:shadow-md transition-shadow"
             >
               <div className="flex items-start gap-3">
                 <div className="flex-shrink-0">
@@ -303,7 +303,7 @@ const OSAnexos = ({ ordemServicoId, readOnly = false }) => {
             <div className="space-y-4">
               {/* Área de upload */}
               <label className="block">
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 hover:bg-blue-50 transition-colors cursor-pointer">
+                <div className="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center hover:border-blue-500 hover:bg-blue-50 transition-colors cursor-pointer">
                   {uploading ? (
                     <div className="space-y-3">
                       <Loader2 className="w-10 h-10 mx-auto text-blue-600 animate-spin" />

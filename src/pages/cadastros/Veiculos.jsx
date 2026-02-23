@@ -170,7 +170,7 @@ const Veiculos = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered?.map((veiculo) => (
-              <div key={veiculo.id} className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow">
+              <div key={veiculo.id} className="border border-gray-200 rounded-2xl p-4 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">

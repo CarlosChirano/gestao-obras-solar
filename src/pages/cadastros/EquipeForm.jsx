@@ -405,7 +405,7 @@ const EquipeForm = () => {
               {membros.map((membro, index) => (
                 <div 
                   key={membro.colaborador_id} 
-                  className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg"
+                  className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-xl"
                 >
                   <div className="flex items-center gap-3">
                     <div 

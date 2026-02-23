@@ -380,7 +380,7 @@ const ImportarOFX = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Arquivo OFX *
                 </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors cursor-pointer">
+                <div className="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center hover:border-blue-500 transition-colors cursor-pointer">
                   <input
                     type="file"
                     accept=".ofx,.qfx"

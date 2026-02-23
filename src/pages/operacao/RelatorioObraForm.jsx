@@ -299,7 +299,7 @@ const SignaturePad = ({ value, onChange, label, cpfValue, onCpfChange, nomeValue
   }
 
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
+    <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h4 className="font-semibold text-gray-700 flex items-center gap-2">
           <PenTool className="w-4 h-4" />
@@ -319,7 +319,7 @@ const SignaturePad = ({ value, onChange, label, cpfValue, onCpfChange, nomeValue
             value={nomeValue || ''}
             onChange={(e) => onNomeChange(e.target.value)}
             placeholder="Nome completo"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
           />
         </div>
         <div>
@@ -336,11 +336,11 @@ const SignaturePad = ({ value, onChange, label, cpfValue, onCpfChange, nomeValue
               onCpfChange(v)
             }}
             placeholder="000.000.000-00"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
           />
         </div>
       </div>
-      <div className="border-2 border-dashed border-gray-300 rounded-lg bg-white relative">
+      <div className="border-2 border-dashed border-gray-200 rounded-xl bg-white relative">
         <canvas
           ref={canvasRef}
           width={500}
@@ -418,7 +418,7 @@ const FotoUpload = ({ relatorioId, secaoId, itemId, fotos, onUpload, onDelete })
       <button
         onClick={() => fileRef.current?.click()}
         disabled={uploading}
-        className="w-12 h-12 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center hover:border-blue-400 hover:bg-blue-50 transition-colors"
+        className="w-12 h-12 border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center hover:border-blue-400 hover:bg-blue-50 transition-colors"
       >
         {uploading ? <Loader2 className="w-4 h-4 animate-spin text-gray-400" /> : <Camera className="w-4 h-4 text-gray-400" />}
       </button>
@@ -770,7 +770,7 @@ const RelatorioObraForm = () => {
       </div>
 
       {/* Vincular OS */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+      <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3">
         <h3 className="font-semibold text-gray-700 flex items-center gap-2">
           <FileText className="w-4 h-4" />
           Vincular à Ordem de Serviço
@@ -792,10 +792,10 @@ const RelatorioObraForm = () => {
               placeholder="Buscar OS pelo número ou cliente..."
               value={osSearch}
               onChange={(e) => setOsSearch(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
             />
             {osSearch.length >= 2 && (
-              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-lg max-h-48 overflow-y-auto">
                 {ordens?.filter(o => 
                   o.numero_os?.toLowerCase().includes(osSearch.toLowerCase()) ||
                   o.cliente?.nome?.toLowerCase().includes(osSearch.toLowerCase())
@@ -816,56 +816,56 @@ const RelatorioObraForm = () => {
       </div>
 
       {/* Dados do Cabeçalho */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
+      <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-4">
         <h3 className="font-semibold text-gray-700">📋 Dados da Obra</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Cliente *</label>
-            <input type="text" value={formData.cliente_nome} onChange={e => setFormData(p => ({...p, cliente_nome: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input type="text" value={formData.cliente_nome} onChange={e => setFormData(p => ({...p, cliente_nome: e.target.value}))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Endereço</label>
-            <input type="text" value={formData.endereco} onChange={e => setFormData(p => ({...p, endereco: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input type="text" value={formData.endereco} onChange={e => setFormData(p => ({...p, endereco: e.target.value}))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Bairro</label>
-            <input type="text" value={formData.bairro} onChange={e => setFormData(p => ({...p, bairro: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input type="text" value={formData.bairro} onChange={e => setFormData(p => ({...p, bairro: e.target.value}))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Cidade</label>
-            <input type="text" value={formData.cidade} onChange={e => setFormData(p => ({...p, cidade: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input type="text" value={formData.cidade} onChange={e => setFormData(p => ({...p, cidade: e.target.value}))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Sistema (kWp)</label>
-            <input type="number" step="0.01" value={formData.sistema_kwp} onChange={e => setFormData(p => ({...p, sistema_kwp: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input type="number" step="0.01" value={formData.sistema_kwp} onChange={e => setFormData(p => ({...p, sistema_kwp: e.target.value}))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Qtd Placas</label>
-            <input type="number" value={formData.quantidade_placas} onChange={e => setFormData(p => ({...p, quantidade_placas: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input type="number" value={formData.quantidade_placas} onChange={e => setFormData(p => ({...p, quantidade_placas: e.target.value}))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Marca Módulos</label>
-            <input type="text" value={formData.marca_modulos} onChange={e => setFormData(p => ({...p, marca_modulos: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input type="text" value={formData.marca_modulos} onChange={e => setFormData(p => ({...p, marca_modulos: e.target.value}))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Potência Módulos (Wp)</label>
-            <input type="number" value={formData.potencia_modulos_wp} onChange={e => setFormData(p => ({...p, potencia_modulos_wp: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input type="number" value={formData.potencia_modulos_wp} onChange={e => setFormData(p => ({...p, potencia_modulos_wp: e.target.value}))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Marca Inversor</label>
-            <input type="text" value={formData.marca_inversor} onChange={e => setFormData(p => ({...p, marca_inversor: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input type="text" value={formData.marca_inversor} onChange={e => setFormData(p => ({...p, marca_inversor: e.target.value}))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Modelo Inversor</label>
-            <input type="text" value={formData.modelo_inversor} onChange={e => setFormData(p => ({...p, modelo_inversor: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input type="text" value={formData.modelo_inversor} onChange={e => setFormData(p => ({...p, modelo_inversor: e.target.value}))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Responsável Técnico</label>
-            <input type="text" value={formData.responsavel_tecnico} onChange={e => setFormData(p => ({...p, responsavel_tecnico: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input type="text" value={formData.responsavel_tecnico} onChange={e => setFormData(p => ({...p, responsavel_tecnico: e.target.value}))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
           </div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Equipe</label>
-            <input type="text" value={formData.equipe_responsavel} onChange={e => setFormData(p => ({...p, equipe_responsavel: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <input type="text" value={formData.equipe_responsavel} onChange={e => setFormData(p => ({...p, equipe_responsavel: e.target.value}))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
           </div>
         </div>
       </div>
@@ -990,7 +990,7 @@ const RelatorioObraForm = () => {
                     rows={2}
                     value={itensRespostas[`obs_${secao.codigo}`]?.texto || ''}
                     onChange={e => updateItem(`obs_${secao.codigo}`, 'texto', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm resize-none"
                     placeholder="Observações..."
                   />
                 </div>
@@ -1002,7 +1002,7 @@ const RelatorioObraForm = () => {
 
       {/* Resultado (apenas pós-obra) */}
       {tipo === 'pos_obra' && (
-        <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-4">
           <h3 className="font-semibold text-gray-700">🏆 Resultado do Comissionamento</h3>
           <div className="flex gap-3">
             <button
@@ -1029,20 +1029,20 @@ const RelatorioObraForm = () => {
           {formData.resultado === 'reprovado' && (
             <div>
               <label className="text-xs text-gray-500 mb-1 block">Motivo da reprovação</label>
-              <textarea rows={3} value={formData.motivo_reprovacao} onChange={e => setFormData(p => ({...p, motivo_reprovacao: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              <textarea rows={3} value={formData.motivo_reprovacao} onChange={e => setFormData(p => ({...p, motivo_reprovacao: e.target.value}))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
             </div>
           )}
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Pendências</label>
-            <textarea rows={2} value={formData.pendencias} onChange={e => setFormData(p => ({...p, pendencias: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            <textarea rows={2} value={formData.pendencias} onChange={e => setFormData(p => ({...p, pendencias: e.target.value}))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" />
           </div>
         </div>
       )}
 
       {/* Observações gerais */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4">
+      <div className="bg-white border border-gray-200 rounded-2xl p-4">
         <label className="text-sm font-medium text-gray-700 mb-2 block">📝 Observações Gerais</label>
-        <textarea rows={3} value={formData.observacoes_gerais} onChange={e => setFormData(p => ({...p, observacoes_gerais: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Observações gerais sobre a obra..." />
+        <textarea rows={3} value={formData.observacoes_gerais} onChange={e => setFormData(p => ({...p, observacoes_gerais: e.target.value}))} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm" placeholder="Observações gerais sobre a obra..." />
       </div>
 
       {/* Assinaturas */}
