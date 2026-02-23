@@ -73,14 +73,14 @@ const RelatoriosObra = () => {
         <div className="flex gap-2">
           <button
             onClick={() => navigate('/relatorio-obra/novo?tipo=pre_obra')}
-            className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 flex items-center gap-2 text-sm font-medium"
+            className="px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl hover:from-orange-600 hover:to-amber-600 flex items-center gap-2 text-sm font-medium shadow-sm transition-all"
           >
             <Plus className="w-4 h-4" />
             Pré-Obra
           </button>
           <button
             onClick={() => navigate('/relatorio-obra/novo?tipo=pos_obra')}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2 text-sm font-medium"
+            className="px-4 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-xl hover:from-emerald-600 hover:to-teal-600 flex items-center gap-2 text-sm font-medium shadow-sm transition-all"
           >
             <Plus className="w-4 h-4" />
             Pós-Obra

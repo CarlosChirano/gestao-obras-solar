@@ -10,6 +10,7 @@ import OSHistorico from '../../components/OSHistorico'
 import OSAssinaturas from '../../components/OSAssinaturas'
 import OSRelatorio from '../../components/OSRelatorio'
 import OSAnexos from '../../components/OSAnexos'
+import OSRelatorioObra from '../../components/OSRelatorioObra'
 
 const OrdemServicoDetalhes = () => {
   const navigate = useNavigate()
@@ -543,6 +544,11 @@ const OrdemServicoDetalhes = () => {
           {/* Documentos e Instruções */}
           <div className="card">
             <OSAnexos ordemServicoId={id} />
+          </div>
+
+          {/* Relatórios de Obra (Pré/Pós) */}
+          <div className="card">
+            <OSRelatorioObra ordemServicoId={id} ordemServico={os} />
           </div>
 
           {/* Checklist */}

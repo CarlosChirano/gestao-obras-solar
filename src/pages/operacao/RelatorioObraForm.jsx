@@ -732,22 +732,41 @@ const RelatorioObraForm = () => {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-32">
+    <div className="space-y-5 max-w-4xl mx-auto pb-32">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/relatorios-obra')} className="p-2 hover:bg-gray-100 rounded-lg">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">
-            {tipo === 'pre_obra' ? '🏗️ Relatório Pré-Obra' : '✅ Relatório Pós-Obra'}
-          </h1>
-          <p className="text-sm text-gray-500">
-            {tipo === 'pre_obra' 
-              ? 'Registro de chegada — estado pré-existente do local' 
-              : 'Checklist completo de entrega — verificação final'}
-          </p>
+      <div className={`rounded-2xl p-5 ${tipo === 'pre_obra' ? 'bg-gradient-to-r from-orange-500 to-amber-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500'}`}>
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate(-1)} className="p-2 hover:bg-white/20 rounded-lg text-white/80 transition-colors">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="flex-1">
+            <h1 className="text-xl font-bold text-white">
+              {tipo === 'pre_obra' ? '🏗️ Relatório Pré-Obra' : '✅ Relatório Pós-Obra'}
+            </h1>
+            <p className="text-sm text-white/80 mt-0.5">
+              {tipo === 'pre_obra' 
+                ? 'Registro de chegada — estado pré-existente' 
+                : 'Checklist completo de entrega'}
+            </p>
+          </div>
         </div>
+        {/* Barra de progresso global */}
+        {(() => {
+          let totalG = 0, preenchidosG = 0
+          template.forEach(s => { const p = getSecaoProgress(s); totalG += p.total; preenchidosG += p.preenchidos })
+          const pct = totalG > 0 ? Math.round((preenchidosG / totalG) * 100) : 0
+          return (
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-xs text-white/80 mb-1.5">
+                <span>{preenchidosG} de {totalG} itens</span>
+                <span className="font-semibold text-white">{pct}%</span>
+              </div>
+              <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+                <div className="h-full bg-white rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          )
+        })()}
       </div>
 
       {/* Vincular OS */}
@@ -852,53 +871,66 @@ const RelatorioObraForm = () => {
       </div>
 
       {/* Seções do Checklist */}
-      {template.map(secao => {
+      {template.map((secao, secIdx) => {
         const progress = getSecaoProgress(secao)
         const isExpanded = expandedSections[secao.codigo] !== false
+        const pct = progress.total > 0 ? Math.round((progress.preenchidos / progress.total) * 100) : 0
+        const isDone = progress.preenchidos === progress.total && progress.total > 0
 
         return (
-          <div key={secao.codigo} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div key={secao.codigo} className={`bg-white border rounded-2xl overflow-hidden transition-shadow ${isDone ? 'border-green-200' : 'border-gray-200'} ${isExpanded ? 'shadow-sm' : ''}`}>
             <button
               onClick={() => toggleSection(secao.codigo)}
-              className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center justify-between p-4 hover:bg-gray-50/50 transition-colors"
             >
-              <div className="flex items-center gap-3">
-                <h3 className="font-semibold text-gray-800 text-left">{secao.titulo}</h3>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                  progress.preenchidos === progress.total && progress.total > 0
-                    ? 'bg-green-100 text-green-700'
-                    : progress.preenchidos > 0
-                    ? 'bg-yellow-100 text-yellow-700'
-                    : 'bg-gray-100 text-gray-500'
-                }`}>
-                  {progress.preenchidos}/{progress.total}
-                </span>
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0 ${isDone ? 'bg-green-100' : 'bg-gray-100'}`}>
+                  {isDone ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <span className="text-gray-400 font-bold text-xs">{secIdx + 1}</span>}
+                </div>
+                <div className="min-w-0 flex-1 text-left">
+                  <h3 className="font-semibold text-gray-800 text-sm truncate">{secao.titulo}</h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden max-w-[120px]">
+                      <div className={`h-full rounded-full transition-all duration-300 ${isDone ? 'bg-green-500' : pct > 0 ? 'bg-blue-500' : 'bg-gray-200'}`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="text-[11px] text-gray-400 tabular-nums">{progress.preenchidos}/{progress.total}</span>
+                  </div>
+                </div>
               </div>
-              {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+              {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />}
             </button>
 
             {isExpanded && (
-              <div className="border-t border-gray-100 p-4 space-y-3">
-                <p className="text-xs text-gray-500 mb-2">{secao.descricao}</p>
+              <div className="border-t border-gray-100 p-4 space-y-2">
+                {secao.descricao && <p className="text-xs text-gray-400 mb-3 italic">{secao.descricao}</p>}
                 
                 {secao.itens.map(item => {
                   const resp = itensRespostas[item.codigo] || {}
                   
                   return (
-                    <div key={item.codigo} className="flex flex-col gap-1 py-2 border-b border-gray-50 last:border-0">
-                      <div className="flex items-start gap-3">
-                        {/* Checkbox ou campo */}
+                    <div key={item.codigo} className={`flex items-start gap-3 py-2.5 px-3 rounded-xl transition-colors ${
+                      item.tipo === 'checkbox' && resp.checkbox ? 'bg-green-50/50' : 'hover:bg-gray-50/50'
+                    }`}>
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        {/* Checkbox */}
                         {item.tipo === 'checkbox' && (
                           <label className="flex items-start gap-3 flex-1 cursor-pointer">
+                            <div className={`w-5 h-5 mt-0.5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                              resp.checkbox 
+                                ? 'bg-green-500 border-green-500' 
+                                : 'border-gray-300 hover:border-blue-400'
+                            }`}>
+                              {resp.checkbox && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
+                            </div>
                             <input
                               type="checkbox"
                               checked={resp.checkbox || false}
                               onChange={e => updateItem(item.codigo, 'checkbox', e.target.checked)}
-                              className="w-5 h-5 mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              className="hidden"
                             />
-                            <span className={`text-sm ${resp.checkbox ? 'text-gray-900' : 'text-gray-600'} ${item.obrigatorio ? 'font-medium' : ''}`}>
+                            <span className={`text-sm leading-snug ${resp.checkbox ? 'text-gray-700' : 'text-gray-600'} ${item.obrigatorio ? 'font-medium' : ''}`}>
                               {item.descricao}
-                              {item.obrigatorio && <span className="text-red-500 ml-1">*</span>}
+                              {item.obrigatorio && <span className="text-red-400 ml-0.5 text-xs">●</span>}
                             </span>
                           </label>
                         )}
@@ -907,13 +939,13 @@ const RelatorioObraForm = () => {
                           <div className="flex-1">
                             <label className="text-sm text-gray-600 mb-1 block">
                               {item.descricao}
-                              {item.obrigatorio && <span className="text-red-500 ml-1">*</span>}
+                              {item.obrigatorio && <span className="text-red-400 ml-0.5 text-xs">●</span>}
                             </label>
                             <input
                               type="text"
                               value={resp.texto || ''}
                               onChange={e => updateItem(item.codigo, 'texto', e.target.value)}
-                              className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50/50 transition-all"
                               placeholder="Preencher..."
                             />
                           </div>
@@ -925,7 +957,7 @@ const RelatorioObraForm = () => {
                             <select
                               value={resp.selecao || ''}
                               onChange={e => updateItem(item.codigo, 'selecao', e.target.value)}
-                              className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+                              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50/50"
                             >
                               <option value="">Selecionar...</option>
                               {item.opcoes?.split(',').map(op => (
@@ -934,8 +966,10 @@ const RelatorioObraForm = () => {
                             </select>
                           </div>
                         )}
+                      </div>
 
-                        {/* Botão de foto */}
+                      {/* Botão de foto */}
+                      <div className="flex-shrink-0">
                         <FotoUpload
                           relatorioId={isEditing ? id : 'temp'}
                           secaoId={null}
@@ -1035,25 +1069,29 @@ const RelatorioObraForm = () => {
       </div>
 
       {/* Botões de ação fixos */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 flex gap-3 justify-end z-50">
+      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 p-3 sm:p-4 flex gap-2 sm:gap-3 justify-end z-50">
         <button
-          onClick={() => navigate('/relatorios-obra')}
-          className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+          onClick={() => navigate(-1)}
+          className="px-3 sm:px-4 py-2.5 border border-gray-300 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition-colors"
         >
           Cancelar
         </button>
         <button
           onClick={() => handleSubmit(false)}
           disabled={loading}
-          className="px-4 py-2 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-700 flex items-center gap-2"
+          className="px-3 sm:px-4 py-2.5 bg-gray-700 text-white rounded-xl text-sm hover:bg-gray-800 flex items-center gap-2 transition-colors"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          Salvar Rascunho
+          <span className="hidden sm:inline">Salvar</span> Rascunho
         </button>
         <button
           onClick={() => handleSubmit(true)}
           disabled={loading}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 flex items-center gap-2 font-medium"
+          className={`px-4 sm:px-6 py-2.5 text-white rounded-xl text-sm flex items-center gap-2 font-medium transition-colors ${
+            tipo === 'pre_obra' 
+              ? 'bg-orange-600 hover:bg-orange-700' 
+              : 'bg-emerald-600 hover:bg-emerald-700'
+          }`}
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
           Assinar e Finalizar
