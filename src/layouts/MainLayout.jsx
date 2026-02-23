@@ -27,7 +27,8 @@ import {
   Wallet,
   TrendingUp,
   Package,
-  Banknote
+  Banknote,
+  ClipboardCheck
 } from 'lucide-react'
 
 const MainLayout = ({ children }) => {
@@ -74,6 +75,11 @@ const MainLayout = ({ children }) => {
       label: 'Custos de Equipe', 
       icon: Banknote, 
       path: '/custos-equipe' 
+    },
+    {
+      label: 'Relatórios de Obra',
+      icon: ClipboardCheck,
+      path: '/relatorios-obra'
     },
     { 
       label: 'Aprovações', 

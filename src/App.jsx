@@ -57,6 +57,8 @@ import Usuarios from './pages/usuarios/Usuarios'
 import UsuarioForm from './pages/usuarios/UsuarioForm'
 import PerfisAcesso from './pages/usuarios/PerfisAcesso'
 import Aprovacoes from './pages/operacao/Aprovacoes'
+import RelatoriosObra from './pages/operacao/RelatoriosObra'
+import RelatorioObraForm from './pages/operacao/RelatorioObraForm'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -186,6 +188,23 @@ function App() {
             <Route path="/custos-equipe" element={
               <PrivateRoute>
                 <CustosEquipe />
+              </PrivateRoute>
+            } />
+
+            {/* Relatórios de Obra */}
+            <Route path="/relatorios-obra" element={
+              <PrivateRoute>
+                <RelatoriosObra />
+              </PrivateRoute>
+            } />
+            <Route path="/relatorio-obra/novo" element={
+              <PrivateRoute>
+                <RelatorioObraForm />
+              </PrivateRoute>
+            } />
+            <Route path="/relatorio-obra/:id" element={
+              <PrivateRoute>
+                <RelatorioObraForm />
               </PrivateRoute>
             } />
 
