@@ -60,6 +60,11 @@ import Aprovacoes from './pages/operacao/Aprovacoes'
 import RelatoriosObra from './pages/operacao/RelatoriosObra'
 import RelatorioObraForm from './pages/operacao/RelatorioObraForm'
 
+// Propostas
+import Propostas from './pages/operacao/Propostas'
+import PropostaForm from './pages/operacao/PropostaForm'
+import PropostaModelos from './pages/cadastros/PropostaModelos'
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -205,6 +210,28 @@ function App() {
             <Route path="/relatorio-obra/:id" element={
               <PrivateRoute>
                 <RelatorioObraForm />
+              </PrivateRoute>
+            } />
+
+            {/* Propostas */}
+            <Route path="/propostas" element={
+              <PrivateRoute>
+                <Propostas />
+              </PrivateRoute>
+            } />
+            <Route path="/proposta/nova" element={
+              <PrivateRoute>
+                <PropostaForm />
+              </PrivateRoute>
+            } />
+            <Route path="/proposta/:id" element={
+              <PrivateRoute>
+                <PropostaForm />
+              </PrivateRoute>
+            } />
+            <Route path="/proposta-modelos" element={
+              <PrivateRoute>
+                <PropostaModelos />
               </PrivateRoute>
             } />
 

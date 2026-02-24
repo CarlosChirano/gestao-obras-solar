@@ -81,10 +81,15 @@ const MainLayout = ({ children }) => {
       icon: ClipboardCheck,
       path: '/relatorios-obra'
     },
-    { 
-      label: 'Aprovações', 
-      icon: ShieldCheck, 
-      path: '/aprovacoes' 
+    {
+      label: 'Propostas',
+      icon: FileText,
+      path: '/propostas'
+    },
+    {
+      label: 'Aprovações',
+      icon: ShieldCheck,
+      path: '/aprovacoes'
     },
   ]
 
@@ -108,6 +113,7 @@ const MainLayout = ({ children }) => {
     { label: 'Veículos', icon: Car, path: '/veiculos' },
     { label: 'Empresas', icon: Building, path: '/empresas-contratantes' },
     { label: 'Checklists', icon: FileText, path: '/checklist-modelos' },
+    { label: 'Modelos Proposta', icon: FileText, path: '/proposta-modelos' },
     { label: 'Motivos de Pausa', icon: PauseCircle, path: '/motivos-pausa' },
   ]
 
