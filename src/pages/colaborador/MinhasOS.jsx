@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { 
   MapPin, Clock, Play, Square, Loader2, LogOut, User, Calendar,
   CheckCircle, AlertCircle, Navigation, Sun, ChevronRight, Timer,
-  Camera, ClipboardCheck, AlertTriangle, MapPinOff
+  Camera, ClipboardCheck, AlertTriangle, MapPinOff, X
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -641,6 +641,8 @@ const OSChecklistsMobile = ({ osId }) => {
           itens:os_checklist_itens(
             id, pergunta, descricao, tipo_resposta, obrigatorio,
             resposta_texto, resposta_numero, resposta_checkbox,
+            resposta_foto_url, resposta_assinatura_url, resposta_data,
+            resposta_hora, resposta_selecao, resposta_selecao_multipla,
             respondido, opcoes, categoria, ordem
           )
         `)
@@ -652,6 +654,7 @@ const OSChecklistsMobile = ({ osId }) => {
 
   const [expandedChecklist, setExpandedChecklist] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(null) // itemId sendo uploaded
 
   const handleResponder = async (itemId, campo, valor) => {
     setSaving(true)
@@ -667,6 +670,32 @@ const OSChecklistsMobile = ({ osId }) => {
       toast.error('Erro ao salvar: ' + err.message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleFotoUpload = async (itemId, file) => {
+    if (!file) return
+    setUploading(itemId)
+    try {
+      const ext = file.name.split('.').pop()
+      const fileName = `checklist/${osId}/${itemId}_${Date.now()}.${ext}`
+      
+      const { error: uploadError } = await supabase.storage
+        .from('anexos')
+        .upload(fileName, file, { cacheControl: '3600', upsert: true })
+      
+      if (uploadError) throw uploadError
+
+      const { data: urlData } = supabase.storage
+        .from('anexos')
+        .getPublicUrl(fileName)
+
+      await handleResponder(itemId, 'resposta_foto_url', urlData.publicUrl)
+      toast.success('Foto enviada!')
+    } catch (err) {
+      toast.error('Erro ao enviar foto: ' + err.message)
+    } finally {
+      setUploading(null)
     }
   }
 
@@ -779,6 +808,101 @@ const OSChecklistsMobile = ({ osId }) => {
                             {opcao}
                           </button>
                         ))}
+                      </div>
+                    )}
+
+                    {/* Foto */}
+                    {item.tipo_resposta === 'foto' && (
+                      <div className="space-y-2">
+                        {item.resposta_foto_url ? (
+                          <div className="relative">
+                            <img 
+                              src={item.resposta_foto_url} 
+                              alt="Foto" 
+                              className="w-full h-48 object-cover rounded-lg border"
+                            />
+                            <button
+                              onClick={() => handleResponder(item.id, 'resposta_foto_url', null)}
+                              className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-full shadow-lg"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <label className={`flex flex-col items-center justify-center w-full h-32 rounded-lg border-2 border-dashed cursor-pointer transition-colors ${
+                            uploading === item.id ? 'border-blue-300 bg-blue-50' : 'border-gray-300 bg-gray-50 hover:bg-gray-100'
+                          }`}>
+                            {uploading === item.id ? (
+                              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                            ) : (
+                              <>
+                                <Camera className="w-8 h-8 text-gray-400 mb-2" />
+                                <span className="text-sm text-gray-500">Tirar foto ou escolher</span>
+                              </>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="hidden"
+                              onChange={(e) => handleFotoUpload(item.id, e.target.files?.[0])}
+                              disabled={uploading === item.id}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Data */}
+                    {item.tipo_resposta === 'data' && (
+                      <input
+                        type="date"
+                        defaultValue={item.resposta_data || ''}
+                        onChange={(e) => handleResponder(item.id, 'resposta_data', e.target.value)}
+                        className="input-field text-sm"
+                      />
+                    )}
+
+                    {/* Hora */}
+                    {item.tipo_resposta === 'hora' && (
+                      <input
+                        type="time"
+                        defaultValue={item.resposta_hora || ''}
+                        onChange={(e) => handleResponder(item.id, 'resposta_hora', e.target.value)}
+                        className="input-field text-sm"
+                      />
+                    )}
+
+                    {/* Seleção Múltipla */}
+                    {item.tipo_resposta === 'selecao_multipla' && (
+                      <div className="space-y-1.5">
+                        {(item.opcoes || []).map((opcao, idx) => {
+                          const selecionados = item.resposta_selecao_multipla || []
+                          const isSelected = selecionados.includes(opcao)
+                          return (
+                            <button
+                              key={idx}
+                              onClick={() => {
+                                const novaLista = isSelected
+                                  ? selecionados.filter(s => s !== opcao)
+                                  : [...selecionados, opcao]
+                                handleResponder(item.id, 'resposta_selecao_multipla', novaLista)
+                              }}
+                              className={`w-full text-left p-3 rounded-lg border text-sm transition-colors flex items-center gap-2 ${
+                                isSelected
+                                  ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium'
+                                  : 'bg-white border-gray-200 text-gray-600'
+                              }`}
+                            >
+                              {isSelected ? (
+                                <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                              ) : (
+                                <div className="w-4 h-4 rounded border-2 border-gray-300 flex-shrink-0" />
+                              )}
+                              {opcao}
+                            </button>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
