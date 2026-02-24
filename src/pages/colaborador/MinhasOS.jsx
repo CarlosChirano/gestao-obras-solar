@@ -640,7 +640,7 @@ const OSChecklistsMobile = ({ osId }) => {
           id, nome, tipo, concluido,
           itens:os_checklist_itens(
             id, pergunta, descricao, tipo_resposta, obrigatorio,
-            resposta_texto, resposta_numero, resposta_boolean, resposta_json,
+            resposta_texto, resposta_numero, resposta_checkbox,
             respondido, opcoes, categoria, ordem
           )
         `)
@@ -725,19 +725,19 @@ const OSChecklistsMobile = ({ osId }) => {
                     {/* Checkbox */}
                     {item.tipo_resposta === 'checkbox' && (
                       <button
-                        onClick={() => handleResponder(item.id, 'resposta_boolean', !item.resposta_boolean)}
+                        onClick={() => handleResponder(item.id, 'resposta_checkbox', !item.resposta_checkbox)}
                         className={`flex items-center gap-2 w-full p-3 rounded-lg border transition-colors ${
-                          item.resposta_boolean
+                          item.resposta_checkbox
                             ? 'bg-green-50 border-green-300 text-green-700'
                             : 'bg-white border-gray-200 text-gray-600'
                         }`}
                       >
-                        {item.resposta_boolean ? (
+                        {item.resposta_checkbox ? (
                           <CheckCircle className="w-5 h-5 text-green-500" />
                         ) : (
                           <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
                         )}
-                        <span className="text-sm">{item.resposta_boolean ? 'Sim' : 'Marcar como feito'}</span>
+                        <span className="text-sm">{item.resposta_checkbox ? 'Sim' : 'Marcar como feito'}</span>
                       </button>
                     )}
 
