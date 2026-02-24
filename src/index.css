@@ -151,6 +151,16 @@ body {
   font-size: 0.875rem;
 }
 
+/* Input com ícone à esquerda (lupa, filtro, etc) */
+.input-field.pl-10,
+.input-field[class*="pl-10"] {
+  padding-left: 2.5rem !important;
+}
+.input-field.pl-9,
+.input-field[class*="pl-9"] {
+  padding-left: 2.25rem !important;
+}
+
 .input-field:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
