@@ -99,7 +99,7 @@ const MinhasOS = () => {
         .select(`
           ordem_servico_id,
           ordem_servico:ordens_servico(
-            id, data_agendamento, endereco, cidade, estado, latitude, longitude, status,
+            id, numero_os, data_agendamento, endereco, cidade, estado, latitude, longitude, status,
             cliente:clientes(nome),
             equipe:equipes(nome)
           )
@@ -371,9 +371,14 @@ const MinhasOS = () => {
       {osEmAndamento && (
         <div className="px-4 mb-4">
           <div className="bg-green-50 border-2 border-green-500 rounded-xl p-4">
-            <div className="flex items-center gap-2 text-green-700 mb-3">
-              <Timer className="w-5 h-5" />
-              <span className="font-semibold">Em Andamento</span>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 text-green-700">
+                <Timer className="w-5 h-5" />
+                <span className="font-semibold">Em Andamento</span>
+              </div>
+              {osEmAndamento.numero_os && (
+                <span className="text-xs font-mono bg-green-100 text-green-700 px-2 py-0.5 rounded">{osEmAndamento.numero_os}</span>
+              )}
             </div>
             
             <p className="font-semibold text-gray-900">{osEmAndamento.cliente?.nome}</p>
@@ -395,6 +400,9 @@ const MinhasOS = () => {
                 </span>
               </div>
             </div>
+
+            {/* Checklists da OS em andamento */}
+            <OSChecklistsMobile osId={osEmAndamento.id} />
 
             <button
               onClick={() => checkoutMutation.mutate(osEmAndamento)}
@@ -442,7 +450,10 @@ const MinhasOS = () => {
                 {/* Info da OS */}
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <p className="font-semibold text-gray-900">{os.cliente?.nome}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{os.numero_os}</span>
+                    </div>
+                    <p className="font-semibold text-gray-900 mt-1">{os.cliente?.nome}</p>
                     <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
                       <MapPin className="w-4 h-4" />
                       <span>{os.endereco || 'Endereço não informado'}{os.cidade ? `, ${os.cidade}` : ''}</span>
