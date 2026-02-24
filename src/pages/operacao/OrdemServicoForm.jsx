@@ -1252,18 +1252,51 @@ const OrdemServicoForm = () => {
         }
       }
 
-      // Inserir checklists selecionados
+      // Inserir checklists selecionados e copiar itens do modelo
       if (checklistsSelecionados.length > 0) {
-        const checklistsData = checklistsSelecionados
-          .filter(c => c.checklist_modelo_id)
-          .map((c, index) => ({
-            ordem_servico_id: osId,
-            checklist_modelo_id: c.checklist_modelo_id,
-            tipo: c.tipo,
-            ordem: index
-          }))
-        if (checklistsData.length > 0) {
-          await supabase.from('os_checklists').insert(checklistsData)
+        for (const c of checklistsSelecionados.filter(c => c.checklist_modelo_id)) {
+          const modelo = checklistModelos?.find(m => m.id === c.checklist_modelo_id)
+
+          // Inserir checklist
+          const { data: checklist, error: checklistError } = await supabase
+            .from('os_checklists')
+            .insert([{
+              ordem_servico_id: osId,
+              checklist_modelo_id: c.checklist_modelo_id,
+              nome: modelo?.nome || 'Checklist',
+              tipo: c.tipo || modelo?.tipo || 'execucao'
+            }])
+            .select()
+            .single()
+
+          if (checklistError) {
+            console.error('Erro ao criar checklist:', checklistError)
+            continue
+          }
+
+          // Buscar itens do modelo
+          const { data: itensModelo } = await supabase
+            .from('checklist_modelo_itens')
+            .select('*')
+            .eq('checklist_modelo_id', c.checklist_modelo_id)
+            .eq('ativo', true)
+            .order('ordem')
+
+          // Copiar itens para a OS
+          if (itensModelo?.length > 0) {
+            const itensData = itensModelo.map((item, idx) => ({
+              os_checklist_id: checklist.id,
+              pergunta: item.pergunta,
+              descricao: item.descricao,
+              tipo_resposta: item.tipo_resposta,
+              obrigatorio: item.obrigatorio,
+              opcoes: item.opcoes,
+              categoria: item.categoria,
+              ordem: idx + 1,
+              respondido: false
+            }))
+            await supabase.from('os_checklist_itens').insert(itensData)
+          }
         }
       }
 
