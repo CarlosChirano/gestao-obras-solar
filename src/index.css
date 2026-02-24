@@ -1,10 +1,6 @@
 @import "tailwindcss";
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* Tailwind v4 já inclui preflight com reset global - NÃO adicionar * { padding: 0 } aqui */
 
 html, body, #root {
   width: 100%;
