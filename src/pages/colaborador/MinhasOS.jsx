@@ -637,7 +637,7 @@ const OSChecklistsMobile = ({ osId }) => {
       const { data } = await supabase
         .from('os_checklists')
         .select(`
-          id, nome, tipo, status,
+          id, nome, tipo, concluido,
           itens:os_checklist_itens(
             id, pergunta, descricao, tipo_resposta, obrigatorio,
             resposta_texto, resposta_numero, resposta_boolean, resposta_json,
