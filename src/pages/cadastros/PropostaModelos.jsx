@@ -246,8 +246,8 @@ const ModeloModal = ({ modelo, onClose, onSave }) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl animate-fade-in max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white rounded-t-2xl">
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-xl font-bold text-gray-900">
             {modelo ? 'Editar Modelo' : 'Novo Modelo de Proposta'}
           </h2>
@@ -256,7 +256,7 @@ const ModeloModal = ({ modelo, onClose, onSave }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto flex-1 space-y-4">
           <div>
             <label className="label">Nome *</label>
             <input
@@ -324,21 +324,21 @@ const ModeloModal = ({ modelo, onClose, onSave }) => {
               placeholder="Notas internas sobre este modelo..."
             />
           </div>
-
-          <div className="flex gap-3 pt-4">
-            <button type="button" onClick={onClose} className="btn-secondary flex-1">
-              Cancelar
-            </button>
-            <button type="submit" disabled={loading} className="btn-primary flex-1">
-              {loading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Save className="w-5 h-5" />
-              )}
-              {loading ? 'Salvando...' : 'Salvar'}
-            </button>
-          </div>
         </form>
+
+        <div className="p-4 border-t bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
+          <button type="button" onClick={onClose} className="btn-secondary flex-1">
+            Cancelar
+          </button>
+          <button onClick={handleSubmit} disabled={loading} className="btn-primary flex-1">
+            {loading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Save className="w-5 h-5" />
+            )}
+            {loading ? 'Salvando...' : 'Salvar'}
+          </button>
+        </div>
       </div>
     </div>
   )
