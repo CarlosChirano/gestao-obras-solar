@@ -304,6 +304,8 @@ const EmpresaModal = ({ empresa, onClose, onSave }) => {
   const [loadingCEP, setLoadingCEP] = useState(false)
   const [errors, setErrors] = useState({})
   
+  const [novaForma, setNovaForma] = useState('')
+
   const [formData, setFormData] = useState({
     nome: empresa?.nome || '',
     razao_social: empresa?.razao_social || '',
@@ -315,8 +317,32 @@ const EmpresaModal = ({ empresa, onClose, onSave }) => {
     cidade: empresa?.cidade || '',
     estado: empresa?.estado || '',
     cep: empresa?.cep || '',
-    observacoes: empresa?.observacoes || ''
+    observacoes: empresa?.observacoes || '',
+    logo_url: empresa?.logo_url || '',
+    formas_pagamento: empresa?.formas_pagamento || [],
+    texto_garantia: empresa?.texto_garantia || '',
+    texto_condicoes_pagamento: empresa?.texto_condicoes_pagamento || '',
+    site: empresa?.site || '',
+    instagram: empresa?.instagram || '',
+    responsavel: empresa?.responsavel || '',
+    responsavel_cargo: empresa?.responsavel_cargo || '',
   })
+
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setFormData(prev => ({ ...prev, [name]: value }))
+  }
+
+  const addForma = () => {
+    if (novaForma.trim()) {
+      setFormData(prev => ({ ...prev, formas_pagamento: [...(prev.formas_pagamento || []), novaForma.trim()] }))
+      setNovaForma('')
+    }
+  }
+
+  const removeForma = (index) => {
+    setFormData(prev => ({ ...prev, formas_pagamento: prev.formas_pagamento.filter((_, i) => i !== index) }))
+  }
 
   const estados = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
 
@@ -606,6 +632,108 @@ const EmpresaModal = ({ empresa, onClose, onSave }) => {
               rows={2}
               placeholder="Observações sobre a empresa..."
             />
+          </div>
+
+          {/* Logo */}
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <h3 className="font-medium text-gray-900 mb-3">Logo</h3>
+            <div className="space-y-2">
+              {formData.logo_url && (
+                <div className="mb-2">
+                  <img src={formData.logo_url} alt="Logo" className="h-20 rounded-lg border" />
+                </div>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  const ext = file.name.split('.').pop()
+                  const path = `logos/${Date.now()}.${ext}`
+                  const { error } = await supabase.storage.from('propostas').upload(path, file)
+                  if (error) { toast.error('Erro no upload: ' + error.message); return }
+                  const { data } = supabase.storage.from('propostas').getPublicUrl(path)
+                  setFormData(prev => ({ ...prev, logo_url: data.publicUrl }))
+                  toast.success('Logo enviada!')
+                }}
+                className="input-field !p-2"
+              />
+              <p className="text-xs text-gray-500">Ou cole a URL diretamente:</p>
+              <input
+                type="url"
+                value={formData.logo_url}
+                onChange={e => setFormData({...formData, logo_url: e.target.value})}
+                className="input-field"
+                placeholder="https://..."
+              />
+            </div>
+          </div>
+
+          {/* Redes e Contato */}
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <h3 className="font-medium text-gray-900 mb-3">Redes e Contato</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="label">Site</label>
+                <input type="url" name="site" value={formData.site} onChange={handleChange} className="input-field" placeholder="https://..." />
+              </div>
+              <div>
+                <label className="label">Instagram</label>
+                <input type="text" name="instagram" value={formData.instagram} onChange={handleChange} className="input-field" placeholder="@empresa" />
+              </div>
+            </div>
+          </div>
+
+          {/* Responsável */}
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <h3 className="font-medium text-gray-900 mb-3">Responsável</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="label">Responsável</label>
+                <input type="text" name="responsavel" value={formData.responsavel} onChange={handleChange} className="input-field" />
+              </div>
+              <div>
+                <label className="label">Cargo</label>
+                <input type="text" name="responsavel_cargo" value={formData.responsavel_cargo} onChange={handleChange} className="input-field" />
+              </div>
+            </div>
+          </div>
+
+          {/* Textos para Propostas */}
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <h3 className="font-medium text-gray-900 mb-3">Textos para Propostas</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="label">Condições de Pagamento Padrão</label>
+                <textarea name="texto_condicoes_pagamento" value={formData.texto_condicoes_pagamento} onChange={handleChange} className="input-field" rows={3} placeholder="Texto que aparecerá nas propostas..." />
+              </div>
+              <div>
+                <label className="label">Texto de Garantia Padrão</label>
+                <textarea name="texto_garantia" value={formData.texto_garantia} onChange={handleChange} className="input-field" rows={3} placeholder="Texto de garantia para propostas..." />
+              </div>
+            </div>
+          </div>
+
+          {/* Formas de Pagamento */}
+          <div className="border-t border-gray-200 pt-4 mt-4">
+            <h3 className="font-medium text-gray-900 mb-3">Formas de Pagamento</h3>
+            <div>
+              <div className="flex gap-2 mb-2">
+                <input type="text" value={novaForma} onChange={e => setNovaForma(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addForma())} className="input-field flex-1" placeholder="Ex: PIX, Boleto 30/60/90..." />
+                <button type="button" onClick={addForma} className="btn-primary text-sm">Adicionar</button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(formData.formas_pagamento || []).map((forma, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
+                    {forma}
+                    <button type="button" onClick={() => removeForma(i)} className="hover:text-red-600">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
         </form>
 
