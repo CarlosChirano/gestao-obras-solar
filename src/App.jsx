@@ -59,6 +59,7 @@ import PerfisAcesso from './pages/usuarios/PerfisAcesso'
 import Aprovacoes from './pages/operacao/Aprovacoes'
 import RelatoriosObra from './pages/operacao/RelatoriosObra'
 import RelatorioObraForm from './pages/operacao/RelatorioObraForm'
+import RelatoriosChecklist from './pages/operacao/RelatoriosChecklist'
 
 // Propostas
 import Propostas from './pages/operacao/Propostas'
@@ -210,6 +211,13 @@ function App() {
             <Route path="/relatorio-obra/:id" element={
               <PrivateRoute>
                 <RelatorioObraForm />
+              </PrivateRoute>
+            } />
+
+            {/* Relatórios de Checklists */}
+            <Route path="/relatorios-checklist" element={
+              <PrivateRoute>
+                <RelatoriosChecklist />
               </PrivateRoute>
             } />
 

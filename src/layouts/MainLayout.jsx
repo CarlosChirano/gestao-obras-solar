@@ -82,6 +82,11 @@ const MainLayout = ({ children }) => {
       path: '/relatorios-obra'
     },
     {
+      label: 'Relatórios Checklist',
+      icon: FileText,
+      path: '/relatorios-checklist'
+    },
+    {
       label: 'Propostas',
       icon: FileText,
       path: '/propostas'

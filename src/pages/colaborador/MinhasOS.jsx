@@ -5,9 +5,10 @@ import { supabase } from '../../lib/supabase'
 import { 
   MapPin, Clock, Play, Square, Loader2, LogOut, User, Calendar,
   CheckCircle, AlertCircle, Navigation, Sun, ChevronRight, Timer,
-  Camera, ClipboardCheck, AlertTriangle, MapPinOff, X
+  Camera, ClipboardCheck, AlertTriangle, MapPinOff, X, FileText
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { gerarRelatorioChecklist } from '../../utils/gerarRelatorioHTML'
 
 // ============================================
 // FUNÇÕES DE GEOLOCALIZAÇÃO
@@ -402,7 +403,7 @@ const MinhasOS = () => {
             </div>
 
             {/* Checklists da OS em andamento */}
-            <OSChecklistsMobile osId={osEmAndamento.id} />
+            <OSChecklistsMobile osId={osEmAndamento.id} osData={osEmAndamento} />
 
             <button
               onClick={() => checkoutMutation.mutate(osEmAndamento)}
@@ -538,7 +539,7 @@ const MinhasOS = () => {
                 )}
 
                 {jaFezCheckin && osExpandida?.id === os.id && (
-                  <OSChecklistsMobile osId={os.id} />
+                  <OSChecklistsMobile osId={os.id} osData={os} />
                 )}
 
                 {/* Botão ver checklists - OS não iniciada */}
@@ -553,7 +554,7 @@ const MinhasOS = () => {
                     </button>
 
                     {osExpandida?.id === os.id && (
-                      <OSChecklistsMobile osId={os.id} />
+                      <OSChecklistsMobile osId={os.id} osData={os} />
                     )}
                   </>
                 )}
@@ -628,8 +629,9 @@ const MinhasOS = () => {
 // CHECKLISTS MOBILE
 // ============================================
 
-const OSChecklistsMobile = ({ osId }) => {
+const OSChecklistsMobile = ({ osId, osData }) => {
   const queryClient = useQueryClient()
+  const [gerandoPDF, setGerandoPDF] = useState(null)
 
   const { data: checklists, isLoading } = useQuery({
     queryKey: ['os-checklists-mobile', osId],
@@ -696,6 +698,23 @@ const OSChecklistsMobile = ({ osId }) => {
       toast.error('Erro ao enviar foto: ' + err.message)
     } finally {
       setUploading(null)
+    }
+  }
+
+  const handleGerarPDF = async (cl) => {
+    setGerandoPDF(cl.id)
+    try {
+      await gerarRelatorioChecklist({
+        checklist: cl,
+        ordemServico: osData,
+        cliente: osData?.cliente,
+        colaborador: null
+      })
+      toast.success('Relatório aberto!')
+    } catch (err) {
+      toast.error('Erro ao gerar: ' + err.message)
+    } finally {
+      setGerandoPDF(null)
     }
   }
 
@@ -907,6 +926,20 @@ const OSChecklistsMobile = ({ osId }) => {
                     )}
                   </div>
                 ))}
+
+                {/* Botão Gerar PDF */}
+                <button
+                  onClick={() => handleGerarPDF(cl)}
+                  disabled={gerandoPDF === cl.id}
+                  className="w-full mt-2 py-3 bg-green-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-green-600 transition-colors disabled:opacity-50"
+                >
+                  {gerandoPDF === cl.id ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <FileText className="w-5 h-5" />
+                  )}
+                  📤 Gerar Relatório PDF
+                </button>
               </div>
             )}
           </div>
