@@ -68,7 +68,7 @@ const PropostaForm = () => {
   const pdfRef = useRef(null)
   const isEditing = !!id && id !== 'nova'
 
-  const [activeTab, setActiveTab] = useState('emissora')
+  const [activeTab, setActiveTab] = useState('destinatario')
   const [loading, setLoading] = useState(false)
   const [loadingPDF, setLoadingPDF] = useState(false)
   const [loadingData, setLoadingData] = useState(isEditing)
@@ -114,12 +114,19 @@ const PropostaForm = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('empresas_contratantes')
-        .select('id, nome, cnpj, telefone, email, endereco, cidade, estado, cep')
+        .select('id, nome, cnpj, telefone, email, endereco, cidade, estado, cep, logo_url, formas_pagamento, texto_garantia, texto_condicoes_pagamento, responsavel, responsavel_cargo')
         .eq('ativo', true)
         .order('nome')
       return data || []
     }
   })
+
+  // Auto-selecionar primeira empresa
+  useEffect(() => {
+    if (empresas?.length > 0 && !formData.empresa_id && !isEditing) {
+      setFormData(prev => ({ ...prev, empresa_id: empresas[0].id }))
+    }
+  }, [empresas])
 
   const { data: clientes } = useQuery({
     queryKey: ['clientes-select'],
@@ -367,10 +374,8 @@ const PropostaForm = () => {
   // ============================================
 
   const handleSave = async (novoStatus = 'rascunho') => {
-    if (!formData.empresa_id) {
-      toast.error('Selecione a empresa emissora')
-      setActiveTab('emissora')
-      return
+    if (!formData.empresa_id && empresas?.length > 0) {
+      setFormData(prev => ({ ...prev, empresa_id: empresas[0].id }))
     }
 
     setLoading(true)
@@ -598,7 +603,6 @@ const PropostaForm = () => {
   // ============================================
 
   const tabs = [
-    { id: 'emissora', label: 'Empresa Emissora', icon: Building },
     { id: 'destinatario', label: 'Destinatário', icon: Users },
     { id: 'obra', label: 'Dados da Obra', icon: Wrench },
     { id: 'itens', label: 'Itens e Valores', icon: DollarSign },
@@ -661,6 +665,15 @@ const PropostaForm = () => {
         </div>
       </div>
 
+      {/* Barra informativa da empresa emissora */}
+      {selectedEmpresa && (
+        <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 rounded-xl text-sm">
+          {selectedEmpresa.logo_url && <img src={selectedEmpresa.logo_url} alt="Logo" className="h-8 rounded" />}
+          <span className="font-medium text-gray-700">Emissora: <strong>{selectedEmpresa.nome}</strong></span>
+          {selectedEmpresa.cnpj && <span className="text-gray-500">| {selectedEmpresa.cnpj}</span>}
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="border-b border-gray-200">
         <nav className="flex gap-4 overflow-x-auto">
@@ -680,43 +693,6 @@ const PropostaForm = () => {
           ))}
         </nav>
       </div>
-
-      {/* ========== TAB 1: EMPRESA EMISSORA ========== */}
-      {activeTab === 'emissora' && (
-        <div className="card space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">Empresa Emissora</h2>
-          <div>
-            <label className="label">Empresa *</label>
-            <select
-              name="empresa_id"
-              value={formData.empresa_id}
-              onChange={handleChange}
-              className="input-field"
-            >
-              <option value="">Selecione a empresa...</option>
-              {empresas?.map(e => (
-                <option key={e.id} value={e.id}>{e.nome}</option>
-              ))}
-            </select>
-          </div>
-
-          {selectedEmpresa && (
-            <div className="bg-blue-50 rounded-xl p-4 space-y-1 text-sm">
-              <p className="font-semibold text-gray-900">{selectedEmpresa.nome}</p>
-              {selectedEmpresa.cnpj && <p className="text-gray-600">CNPJ: {selectedEmpresa.cnpj}</p>}
-              {selectedEmpresa.telefone && <p className="text-gray-600">Tel: {selectedEmpresa.telefone}</p>}
-              {selectedEmpresa.email && <p className="text-gray-600">Email: {selectedEmpresa.email}</p>}
-              {selectedEmpresa.endereco && (
-                <p className="text-gray-600">
-                  {selectedEmpresa.endereco}
-                  {selectedEmpresa.cidade && `, ${selectedEmpresa.cidade}`}
-                  {selectedEmpresa.estado && ` - ${selectedEmpresa.estado}`}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ========== TAB 2: DESTINATÁRIO ========== */}
       {activeTab === 'destinatario' && (
