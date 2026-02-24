@@ -294,13 +294,13 @@ const OrdensServico = () => {
       <div className="card space-y-4">
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
             <input
               type="text"
               placeholder="Buscar por número, cliente, endereço..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="input-field pl-12"
+              className="input-field pl-10"
             />
           </div>
           <button 
@@ -484,9 +484,9 @@ const OrdensServico = () => {
               return (
                 <div 
                   key={os.id} 
-                  className={`border rounded-lg p-4 transition-shadow ${
-                    isDeletado 
-                      ? 'border-red-200 bg-red-50 opacity-60' 
+                  className={`border rounded-xl p-5 transition-shadow ${
+                    isDeletado
+                      ? 'border-red-200 bg-red-50 opacity-60'
                       : 'border-gray-200 hover:shadow-md'
                   }`}
                 >
@@ -549,23 +549,23 @@ const OrdensServico = () => {
                     </div>
 
                     {/* Custos e Valores */}
-                    <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-6 tabular-nums">
                       {/* Custos */}
                       <div className="text-right space-y-1">
-                        <div className="flex items-center gap-2 text-sm">
+                        <div className="flex items-center justify-end gap-2 text-sm">
                           <Users className="w-4 h-4 text-orange-500" />
                           <span className="text-gray-600">Mão de Obra:</span>
-                          <span className="font-medium text-orange-600">{formatCurrency(custos.custoMaoObra)}</span>
+                          <span className="font-medium text-orange-600 text-right min-w-[90px]">{formatCurrency(custos.custoMaoObra)}</span>
                         </div>
                         {custos.custoVeiculo > 0 && (
-                          <div className="flex items-center gap-2 text-sm">
+                          <div className="flex items-center justify-end gap-2 text-sm">
                             <Car className="w-4 h-4 text-purple-500" />
                             <span className="text-gray-600">Veículo:</span>
-                            <span className="font-medium text-purple-600">{formatCurrency(custos.custoVeiculo)}</span>
+                            <span className="font-medium text-purple-600 text-right min-w-[90px]">{formatCurrency(custos.custoVeiculo)}</span>
                           </div>
                         )}
                         {(custos.custoGelo > 0 || custos.custoCafe > 0) && (
-                          <div className="flex items-center gap-3 text-xs text-gray-500 pl-6">
+                          <div className="flex items-center justify-end gap-3 text-xs text-gray-500">
                             {custos.custoGelo > 0 && (
                               <span className="flex items-center gap-1">
                                 <Snowflake className="w-3 h-3 text-cyan-500" />
@@ -580,15 +580,18 @@ const OrdensServico = () => {
                             )}
                           </div>
                         )}
-                        <div className="flex items-center gap-2 text-sm border-t pt-1">
+                        <div className="flex items-center justify-end gap-2 text-sm border-t border-gray-200 pt-1.5 mt-1.5">
                           <DollarSign className="w-4 h-4 text-red-500" />
                           <span className="text-gray-600">Custo Total:</span>
-                          <span className="font-bold text-red-600">{formatCurrency(custos.custoTotal)}</span>
+                          <span className="font-bold text-red-600 text-right min-w-[90px]">{formatCurrency(custos.custoTotal)}</span>
                         </div>
                       </div>
 
+                      {/* Separador vertical */}
+                      <div className="w-px h-16 bg-gray-200 self-center"></div>
+
                       {/* Valor Total (Faturamento) */}
-                      <div className="text-right border-l pl-6">
+                      <div className="text-right">
                         <p className="text-xs text-gray-500">Valor Total</p>
                         <p className="font-bold text-lg text-green-600">
                           {formatCurrency(os.valor_total)}

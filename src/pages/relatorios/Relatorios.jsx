@@ -527,7 +527,7 @@ const Relatorios = () => {
                     <label className="text-sm text-gray-500">Buscar</label>
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                      <input type="text" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Cliente, endereço..." className="input-field pl-9" />
+                      <input type="text" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Cliente, endereço..." className="input-field pl-10" />
                     </div>
                   </div>
                   <div className="min-w-[200px]">

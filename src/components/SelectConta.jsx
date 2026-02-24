@@ -269,7 +269,7 @@ const SelectConta = ({ value, onChange, tipo = null, label = "Plano de Contas", 
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Buscar conta..."
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                   autoFocus
                 />
               </div>
