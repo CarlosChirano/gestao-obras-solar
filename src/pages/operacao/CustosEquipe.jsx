@@ -17,6 +17,7 @@ const CustosEquipe = () => {
 
   const [dataInicio, setDataInicio] = useState(primeiroDiaMes.toISOString().split('T')[0])
   const [dataFim, setDataFim] = useState(hoje.toISOString().split('T')[0])
+  const [periodoAtivo, setPeriodoAtivo] = useState('mes')
   const [filtroColaborador, setFiltroColaborador] = useState('')
   const [filtroObra, setFiltroObra] = useState('')
   const [busca, setBusca] = useState('')
@@ -48,6 +49,7 @@ const CustosEquipe = () => {
     }
     setDataInicio(inicio.toISOString().split('T')[0])
     setDataFim(fim.toISOString().split('T')[0])
+    setPeriodoAtivo(tipo)
   }
 
   // ============================================
@@ -287,7 +289,7 @@ const CustosEquipe = () => {
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex gap-1">
             {['semana', 'mes', 'trimestre', 'ano'].map(p => (
-              <button key={p} onClick={() => setPeriodo(p)} className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors ${periodo === p ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              <button key={p} onClick={() => setPeriodo(p)} className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors ${periodoAtivo === p ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                 {p === 'mes' ? 'Mês' : p === 'trimestre' ? 'Trimestre' : p.charAt(0).toUpperCase() + p.slice(1)}
               </button>
             ))}

@@ -161,6 +161,12 @@ body {
   padding-left: 2.25rem !important;
 }
 
+/* Fallback: qualquer input dentro de div relative */
+.relative > .input-field:not(:first-child),
+div[class*="relative"] > input.input-field {
+  padding-left: 2.5rem;
+}
+
 .input-field:focus {
   border-color: #2563eb;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
