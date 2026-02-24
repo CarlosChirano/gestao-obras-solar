@@ -72,6 +72,7 @@ const MinhasOS = () => {
   const [localizacao, setLocalizacao] = useState(null)
   const [loadingLocation, setLoadingLocation] = useState(false)
   const [osEmAndamento, setOsEmAndamento] = useState(null)
+  const [osExpandida, setOsExpandida] = useState(null)
 
   // Verificar se está logado
   useEffect(() => {
@@ -514,6 +515,38 @@ const MinhasOS = () => {
                   </div>
                 )}
 
+                {/* Botão ver detalhes - OS concluída */}
+                {jaFezCheckin && (
+                  <button
+                    onClick={() => setOsExpandida(osExpandida?.id === os.id ? null : os)}
+                    className="w-full mt-3 py-2 bg-blue-50 text-blue-600 rounded-xl text-sm font-medium hover:bg-blue-100 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <ClipboardCheck className="w-4 h-4" />
+                    {osExpandida?.id === os.id ? 'Fechar Detalhes' : 'Ver Detalhes / Checklists'}
+                  </button>
+                )}
+
+                {jaFezCheckin && osExpandida?.id === os.id && (
+                  <OSChecklistsMobile osId={os.id} />
+                )}
+
+                {/* Botão ver checklists - OS não iniciada */}
+                {!jaFezCheckin && (
+                  <>
+                    <button
+                      onClick={() => setOsExpandida(osExpandida?.id === os.id ? null : os)}
+                      className="w-full mt-2 py-2 bg-gray-50 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <ClipboardCheck className="w-4 h-4" />
+                      {osExpandida?.id === os.id ? 'Fechar' : 'Checklists'}
+                    </button>
+
+                    {osExpandida?.id === os.id && (
+                      <OSChecklistsMobile osId={os.id} />
+                    )}
+                  </>
+                )}
+
                 {/* Botão de Check-in */}
                 {!jaFezCheckin && !osEmAndamento && (
                   <div className="mt-3">
@@ -576,6 +609,174 @@ const MinhasOS = () => {
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ============================================
+// CHECKLISTS MOBILE
+// ============================================
+
+const OSChecklistsMobile = ({ osId }) => {
+  const queryClient = useQueryClient()
+
+  const { data: checklists, isLoading } = useQuery({
+    queryKey: ['os-checklists-mobile', osId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('os_checklists')
+        .select(`
+          id, nome, tipo, status,
+          itens:os_checklist_itens(
+            id, pergunta, descricao, tipo_resposta, obrigatorio,
+            resposta_texto, resposta_numero, resposta_boolean, resposta_json,
+            respondido, opcoes, categoria, ordem
+          )
+        `)
+        .eq('ordem_servico_id', osId)
+        .order('created_at')
+      return data || []
+    }
+  })
+
+  const [expandedChecklist, setExpandedChecklist] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  const handleResponder = async (itemId, campo, valor) => {
+    setSaving(true)
+    try {
+      const updateData = { [campo]: valor, respondido: true }
+      const { error } = await supabase
+        .from('os_checklist_itens')
+        .update(updateData)
+        .eq('id', itemId)
+      if (error) throw error
+      queryClient.invalidateQueries(['os-checklists-mobile', osId])
+    } catch (err) {
+      toast.error('Erro ao salvar: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (isLoading) return (
+    <div className="flex justify-center py-4">
+      <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+    </div>
+  )
+
+  if (!checklists?.length) return (
+    <div className="mt-3 p-4 bg-gray-50 rounded-xl text-center text-sm text-gray-500">
+      Nenhum checklist vinculado a esta OS
+    </div>
+  )
+
+  return (
+    <div className="mt-3 space-y-3">
+      <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+        <ClipboardCheck className="w-4 h-4 text-blue-600" />
+        Checklists
+      </h4>
+      {checklists.map(cl => {
+        const totalItens = cl.itens?.length || 0
+        const respondidos = cl.itens?.filter(i => i.respondido).length || 0
+        const progresso = totalItens > 0 ? Math.round((respondidos / totalItens) * 100) : 0
+        const isExpanded = expandedChecklist === cl.id
+
+        return (
+          <div key={cl.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setExpandedChecklist(isExpanded ? null : cl.id)}
+              className="w-full p-4 flex items-center justify-between"
+            >
+              <div className="text-left">
+                <p className="font-medium text-gray-900">{cl.nome}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{respondidos}/{totalItens} itens • {progresso}%</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500 rounded-full transition-all" style={{width: `${progresso}%`}} />
+                </div>
+                <ChevronRight className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+              </div>
+            </button>
+
+            {isExpanded && (
+              <div className="border-t p-4 space-y-4">
+                {cl.itens?.sort((a,b) => a.ordem - b.ordem).map(item => (
+                  <div key={item.id} className="space-y-1.5">
+                    <label className="text-sm font-medium text-gray-700">
+                      {item.pergunta}
+                      {item.obrigatorio && <span className="text-red-500 ml-1">*</span>}
+                    </label>
+                    {item.descricao && <p className="text-xs text-gray-500">{item.descricao}</p>}
+
+                    {/* Checkbox */}
+                    {item.tipo_resposta === 'checkbox' && (
+                      <button
+                        onClick={() => handleResponder(item.id, 'resposta_boolean', !item.resposta_boolean)}
+                        className={`flex items-center gap-2 w-full p-3 rounded-lg border transition-colors ${
+                          item.resposta_boolean
+                            ? 'bg-green-50 border-green-300 text-green-700'
+                            : 'bg-white border-gray-200 text-gray-600'
+                        }`}
+                      >
+                        {item.resposta_boolean ? (
+                          <CheckCircle className="w-5 h-5 text-green-500" />
+                        ) : (
+                          <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
+                        )}
+                        <span className="text-sm">{item.resposta_boolean ? 'Sim' : 'Marcar como feito'}</span>
+                      </button>
+                    )}
+
+                    {/* Texto */}
+                    {item.tipo_resposta === 'texto' && (
+                      <input
+                        type="text"
+                        defaultValue={item.resposta_texto || ''}
+                        onBlur={(e) => handleResponder(item.id, 'resposta_texto', e.target.value)}
+                        className="input-field text-sm"
+                        placeholder="Digite aqui..."
+                      />
+                    )}
+
+                    {/* Número */}
+                    {item.tipo_resposta === 'numero' && (
+                      <input
+                        type="number"
+                        defaultValue={item.resposta_numero || ''}
+                        onBlur={(e) => handleResponder(item.id, 'resposta_numero', parseFloat(e.target.value))}
+                        className="input-field text-sm"
+                        placeholder="0"
+                      />
+                    )}
+
+                    {/* Seleção única */}
+                    {item.tipo_resposta === 'selecao_unica' && (
+                      <div className="space-y-1.5">
+                        {(item.opcoes || []).map((opcao, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => handleResponder(item.id, 'resposta_texto', opcao)}
+                            className={`w-full text-left p-3 rounded-lg border text-sm transition-colors ${
+                              item.resposta_texto === opcao
+                                ? 'bg-blue-50 border-blue-300 text-blue-700 font-medium'
+                                : 'bg-white border-gray-200 text-gray-600'
+                            }`}
+                          >
+                            {opcao}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
