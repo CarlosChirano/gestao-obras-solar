@@ -14,7 +14,8 @@ const Calendario = () => {
   const [diaExpandido, setDiaExpandido] = useState(null) // { date, dateStr }
 
   const { data: ordensServico, isLoading } = useQuery({
-    queryKey: ['calendario-os', currentDate.getMonth(), currentDate.getFullYear()],
+    queryKey: ['calendario-os', `${currentDate.getFullYear()}-${currentDate.getMonth()}`],
+    keepPreviousData: true,
     queryFn: async () => {
       const inicioMes = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
       const fimMes = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
