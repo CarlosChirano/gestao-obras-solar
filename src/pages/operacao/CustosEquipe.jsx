@@ -287,7 +287,7 @@ const CustosEquipe = () => {
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex gap-1">
             {['semana', 'mes', 'trimestre', 'ano'].map(p => (
-              <button key={p} onClick={() => setPeriodo(p)} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 hover:bg-blue-100 text-gray-600 hover:text-blue-700 transition-colors capitalize">
+              <button key={p} onClick={() => setPeriodo(p)} className={`px-4 py-2 text-sm font-medium rounded-xl transition-colors ${periodo === p ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                 {p === 'mes' ? 'Mês' : p === 'trimestre' ? 'Trimestre' : p.charAt(0).toUpperCase() + p.slice(1)}
               </button>
             ))}
@@ -304,17 +304,17 @@ const CustosEquipe = () => {
 
         {/* Filtro de colaborador */}
         <div className="flex flex-wrap items-center gap-4 mt-4">
-          <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-            <Search className="w-4 h-4 text-gray-400" />
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
               placeholder="Buscar colaborador..."
               value={busca}
               onChange={e => setBusca(e.target.value)}
-              className="input-field !py-1.5 !text-sm"
+              className="input-field pl-10 !py-1.5 !text-sm"
             />
             {busca && (
-              <button onClick={() => setBusca('')} className="p-1 hover:bg-gray-100 rounded">
+              <button onClick={() => setBusca('')} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded">
                 <X className="w-4 h-4 text-gray-400" />
               </button>
             )}
