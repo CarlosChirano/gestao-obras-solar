@@ -118,6 +118,7 @@ const OrdemServicoForm = () => {
   // Anexos da OS
   const [anexos, setAnexos] = useState([])
   const [uploadingAnexo, setUploadingAnexo] = useState(false)
+  const [uploadingDoc, setUploadingDoc] = useState(false)
   
   // Endereços de obras do cliente selecionado
   const [enderecosObra, setEnderecosObra] = useState([])
@@ -329,7 +330,7 @@ const OrdemServicoForm = () => {
         .from('os_anexos')
         .select('*')
         .eq('ordem_servico_id', id)
-        .eq('ativo', true)
+        .order('created_at', { ascending: false })
       setAnexos(osAnexos || [])
 
       const { data: osServicos } = await supabase
@@ -1354,6 +1355,111 @@ const OrdemServicoForm = () => {
 
   const estados = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']
   
+  // ============================================
+  // DOCUMENTOS / INSTRUÇÕES DA OS
+  // ============================================
+  const handleUploadDocumento = async (e) => {
+    const files = e.target.files
+    if (!files || files.length === 0 || !id) return
+    
+    setUploadingDoc(true)
+    try {
+      for (const file of Array.from(files)) {
+        const ext = file.name.split('.').pop().toLowerCase()
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const fileName = `${id}/${Date.now()}_${safeName}`
+        
+        const { error: uploadError } = await supabase.storage
+          .from('anexos')
+          .upload(fileName, file, { cacheControl: '3600', upsert: true })
+        
+        if (uploadError) {
+          toast.error(`Erro ao enviar ${file.name}: ${uploadError.message}`)
+          continue
+        }
+
+        const { data: urlData } = supabase.storage
+          .from('anexos')
+          .getPublicUrl(fileName)
+
+        // Determinar tipo pelo mime
+        let tipo = 'documento'
+        if (file.type.startsWith('image/')) tipo = 'imagem'
+        else if (file.type.includes('pdf')) tipo = 'pdf'
+        
+        const { error: insertError } = await supabase
+          .from('os_anexos')
+          .insert({
+            ordem_servico_id: id,
+            nome: file.name,
+            descricao: '',
+            tipo,
+            arquivo_url: urlData.publicUrl,
+            tamanho_bytes: file.size,
+            visivel_colaborador: true
+          })
+        
+        if (insertError) {
+          toast.error(`Erro ao registrar ${file.name}: ${insertError.message}`)
+        }
+      }
+      
+      toast.success(`${files.length} arquivo(s) enviado(s)!`)
+      
+      // Recarregar anexos
+      const { data: osAnexos } = await supabase
+        .from('os_anexos')
+        .select('*')
+        .eq('ordem_servico_id', id)
+        .order('created_at', { ascending: false })
+      setAnexos(osAnexos || [])
+    } catch (err) {
+      toast.error('Erro no upload: ' + err.message)
+    } finally {
+      setUploadingDoc(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleDeleteDocumento = async (doc) => {
+    if (!confirm(`Excluir "${doc.nome}"?`)) return
+    try {
+      // Extrair path do storage a partir da URL
+      const url = doc.arquivo_url || ''
+      const pathMatch = url.match(/\/anexos\/(.+)$/)
+      if (pathMatch) {
+        await supabase.storage.from('anexos').remove([decodeURIComponent(pathMatch[1])])
+      }
+      
+      await supabase.from('os_anexos').delete().eq('id', doc.id)
+      setAnexos(prev => prev.filter(a => a.id !== doc.id))
+      toast.success('Documento excluído')
+    } catch (err) {
+      toast.error('Erro ao excluir: ' + err.message)
+    }
+  }
+
+  const handleToggleVisibilidade = async (doc) => {
+    try {
+      const novoValor = !doc.visivel_colaborador
+      await supabase
+        .from('os_anexos')
+        .update({ visivel_colaborador: novoValor })
+        .eq('id', doc.id)
+      setAnexos(prev => prev.map(a => a.id === doc.id ? { ...a, visivel_colaborador: novoValor } : a))
+      toast.success(novoValor ? 'Visível para o colaborador' : 'Oculto do colaborador')
+    } catch (err) {
+      toast.error('Erro: ' + err.message)
+    }
+  }
+
+  const formatFileSize = (bytes) => {
+    if (!bytes) return ''
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
   const tiposCusto = [
     { value: 'material', label: 'Material' },
     { value: 'alimentacao', label: 'Alimentação' },
@@ -1370,6 +1476,7 @@ const OrdemServicoForm = () => {
     { id: 'custos', label: 'Custos', icon: DollarSign },
     { id: 'veiculo', label: 'Veículo', icon: Car },
     { id: 'checklists', label: 'Checklists', icon: ClipboardCheck },
+    { id: 'documentos', label: 'Documentos', icon: FileText },
     ...(isEditing ? [{ id: 'diario', label: 'Diário de Obra', icon: CalendarDays }] : [])
   ]
 
@@ -2269,6 +2376,119 @@ const OrdemServicoForm = () => {
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab: Documentos */}
+        {activeTab === 'documentos' && (
+          <div className="card space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">📎 Documentos e Instruções da Obra</h2>
+              {isEditing && (
+                <label className={`flex items-center gap-2 px-4 py-2 rounded-xl cursor-pointer text-sm font-medium transition-colors ${
+                  uploadingDoc ? 'bg-blue-100 text-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}>
+                  {uploadingDoc ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Enviando...</>
+                  ) : (
+                    <><Upload className="w-4 h-4" /> Anexar Arquivo</>
+                  )}
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    disabled={uploadingDoc}
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.dwg,.zip,.rar"
+                    onChange={handleUploadDocumento}
+                  />
+                </label>
+              )}
+            </div>
+
+            {!isEditing && (
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                <p className="text-sm text-yellow-700 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" />
+                  Salve a OS primeiro para poder anexar documentos.
+                </p>
+              </div>
+            )}
+
+            {isEditing && anexos.length === 0 && (
+              <div className="text-center py-12 text-gray-400">
+                <FileText className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>Nenhum documento anexado</p>
+                <p className="text-sm mt-1">Anexe PDFs com instruções de obra, plantas, projetos, etc.</p>
+              </div>
+            )}
+
+            {anexos.length > 0 && (
+              <div className="space-y-2">
+                {anexos.map(doc => (
+                  <div key={doc.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl group hover:bg-gray-100 transition-colors">
+                    {/* Ícone */}
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                      doc.tipo === 'pdf' ? 'bg-red-100' : doc.tipo === 'imagem' ? 'bg-green-100' : 'bg-blue-100'
+                    }`}>
+                      <FileText className={`w-5 h-5 ${
+                        doc.tipo === 'pdf' ? 'text-red-600' : doc.tipo === 'imagem' ? 'text-green-600' : 'text-blue-600'
+                      }`} />
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 text-sm truncate">{doc.nome}</p>
+                      <p className="text-xs text-gray-500">
+                        {formatFileSize(doc.tamanho_bytes)}
+                        {doc.created_at && ` • ${new Date(doc.created_at).toLocaleDateString('pt-BR')}`}
+                      </p>
+                    </div>
+
+                    {/* Toggle visibilidade */}
+                    <button
+                      type="button"
+                      onClick={() => handleToggleVisibilidade(doc)}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        doc.visivel_colaborador
+                          ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                          : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                      }`}
+                      title={doc.visivel_colaborador ? 'Visível no app do colaborador' : 'Oculto do colaborador'}
+                    >
+                      <Eye className="w-3 h-3" />
+                      {doc.visivel_colaborador ? 'Visível' : 'Oculto'}
+                    </button>
+
+                    {/* Ações */}
+                    <div className="flex items-center gap-1">
+                      <a
+                        href={doc.arquivo_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 hover:bg-blue-100 rounded-lg text-blue-600"
+                        title="Abrir"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteDocumento(doc)}
+                        className="p-2 hover:bg-red-100 rounded-lg text-red-500"
+                        title="Excluir"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="p-3 bg-blue-50 rounded-xl">
+              <p className="text-xs text-blue-700">
+                💡 Documentos marcados como <strong>"Visível"</strong> aparecerão no app mobile do colaborador para consulta em campo.
+              </p>
             </div>
           </div>
         )}

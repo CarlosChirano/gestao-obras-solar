@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { 
   MapPin, Clock, Play, Square, Loader2, LogOut, User, Calendar,
   CheckCircle, AlertCircle, Navigation, Sun, ChevronRight, Timer,
-  Camera, ClipboardCheck, AlertTriangle, MapPinOff, X, FileText
+  Camera, ClipboardCheck, AlertTriangle, MapPinOff, X, FileText, Eye
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { gerarRelatorioChecklist } from '../../utils/gerarRelatorioHTML'
@@ -402,6 +402,9 @@ const MinhasOS = () => {
               </div>
             </div>
 
+            {/* Documentos/Instruções da OS em andamento */}
+            <OSDocumentosMobile osId={osEmAndamento.id} />
+
             {/* Checklists da OS em andamento */}
             <OSChecklistsMobile osId={osEmAndamento.id} osData={osEmAndamento} />
 
@@ -539,7 +542,10 @@ const MinhasOS = () => {
                 )}
 
                 {jaFezCheckin && osExpandida?.id === os.id && (
-                  <OSChecklistsMobile osId={os.id} osData={os} />
+                  <>
+                    <OSDocumentosMobile osId={os.id} />
+                    <OSChecklistsMobile osId={os.id} osData={os} />
+                  </>
                 )}
 
                 {/* Botão ver checklists - OS não iniciada */}
@@ -554,7 +560,10 @@ const MinhasOS = () => {
                     </button>
 
                     {osExpandida?.id === os.id && (
-                      <OSChecklistsMobile osId={os.id} osData={os} />
+                      <>
+                        <OSDocumentosMobile osId={os.id} />
+                        <OSChecklistsMobile osId={os.id} osData={os} />
+                      </>
                     )}
                   </>
                 )}
@@ -629,6 +638,67 @@ const MinhasOS = () => {
 // CHECKLISTS MOBILE
 // ============================================
 
+// ============================================
+// DOCUMENTOS / INSTRUÇÕES DA OS (MOBILE)
+// ============================================
+const OSDocumentosMobile = ({ osId }) => {
+  const { data: documentos, isLoading } = useQuery({
+    queryKey: ['os-documentos-mobile', osId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('os_anexos')
+        .select('id, nome, tipo, arquivo_url, tamanho_bytes, created_at')
+        .eq('ordem_servico_id', osId)
+        .eq('visivel_colaborador', true)
+        .order('created_at', { ascending: false })
+      return data || []
+    }
+  })
+
+  if (isLoading || !documentos?.length) return null
+
+  const formatSize = (bytes) => {
+    if (!bytes) return ''
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  return (
+    <div className="mt-3 space-y-2">
+      <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+        <FileText className="w-4 h-4 text-blue-600" />
+        Instruções da Obra
+      </h4>
+      {documentos.map(doc => (
+        <a
+          key={doc.id}
+          href={doc.arquivo_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors"
+        >
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+            doc.tipo === 'pdf' ? 'bg-red-100' : doc.tipo === 'imagem' ? 'bg-green-100' : 'bg-blue-100'
+          }`}>
+            <FileText className={`w-5 h-5 ${
+              doc.tipo === 'pdf' ? 'text-red-600' : doc.tipo === 'imagem' ? 'text-green-600' : 'text-blue-600'
+            }`} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-gray-900 text-sm truncate">{doc.nome}</p>
+            <p className="text-xs text-gray-500">{formatSize(doc.tamanho_bytes)} • Toque para abrir</p>
+          </div>
+          <Eye className="w-5 h-5 text-blue-500 flex-shrink-0" />
+        </a>
+      ))}
+    </div>
+  )
+}
+
+// ============================================
+// CHECKLISTS DA OS (MOBILE)
+// ============================================
 const OSChecklistsMobile = ({ osId, osData }) => {
   const queryClient = useQueryClient()
   const [gerandoPDF, setGerandoPDF] = useState(null)
