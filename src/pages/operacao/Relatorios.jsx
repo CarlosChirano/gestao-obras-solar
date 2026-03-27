@@ -5,7 +5,7 @@ import {
   FileText, TrendingUp, TrendingDown, DollarSign, Users, 
   BarChart3, MapPin, Target, Building2, 
   Loader2, Layers, AlertCircle, ChevronDown, ChevronUp,
-  Search, X, Filter
+  Search, X, Filter, CheckCircle2
 } from 'lucide-react'
 
 // ============================================
@@ -37,6 +37,7 @@ const Relatorios = () => {
   const [filtroCliente, setFiltroCliente] = useState('')
   const [obraExpandida, setObraExpandida] = useState(null)
   const [busca, setBusca] = useState('')
+  const [obrasSelecionadas, setObrasSelecionadas] = useState(new Set())
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
 
   // Atalhos de período
@@ -220,11 +221,28 @@ const Relatorios = () => {
       const colabs = colaboradoresPorOS[os.id] || []
       let custoMaoObra = colabs.reduce((sum, c) => sum + (parseFloat(c.valor_total) || 0), 0)
 
+      // Detalhamento mão de obra
+      const detalhe_mao_obra = {
+        diarias: colabs.reduce((sum, c) => sum + ((parseFloat(c.valor_diaria) || 0) * (parseFloat(c.dias_trabalhados) || 1)), 0),
+        cafe: colabs.reduce((sum, c) => sum + (parseFloat(c.valor_cafe) || 0), 0),
+        almoco: colabs.reduce((sum, c) => sum + (parseFloat(c.valor_almoco) || 0), 0),
+        transporte: colabs.reduce((sum, c) => sum + (parseFloat(c.valor_transporte) || 0), 0),
+        outros: colabs.reduce((sum, c) => sum + (parseFloat(c.valor_outros) || 0), 0),
+      }
+
       // Custo veículos (soma campos individuais, mesma lógica da listagem)
       const veics = veiculosPorOS[os.id] || []
       const custoVeiculo = veics.reduce((sum, v) => {
         return sum + (parseFloat(v.valor_aluguel) || 0) + (parseFloat(v.valor_gasolina) || 0) + (parseFloat(v.valor_gelo) || 0) + (parseFloat(v.valor_cafe) || 0)
       }, 0)
+
+      // Detalhamento veículos
+      const detalhe_veiculo = {
+        aluguel: veics.reduce((sum, v) => sum + (parseFloat(v.valor_aluguel) || 0), 0),
+        gasolina: veics.reduce((sum, v) => sum + (parseFloat(v.valor_gasolina) || 0), 0),
+        gelo: veics.reduce((sum, v) => sum + (parseFloat(v.valor_gelo) || 0), 0),
+        cafe: veics.reduce((sum, v) => sum + (parseFloat(v.valor_cafe) || 0), 0),
+      }
 
       const custoTotal = custoMaoObra + custoVeiculo
       const receita = parseFloat(os.valor_total) || 0
@@ -237,6 +255,8 @@ const Relatorios = () => {
         receita,
         custo_mao_obra: custoMaoObra,
         custo_veiculo: custoVeiculo,
+        detalhe_mao_obra,
+        detalhe_veiculo,
         custo_total: custoTotal,
         lucro,
         margem
@@ -266,6 +286,8 @@ const Relatorios = () => {
           custo_mao_obra: 0,
           custo_veiculo: 0,
           custo_total: 0,
+          detalhe_mao_obra: { diarias: 0, cafe: 0, almoco: 0, transporte: 0, outros: 0 },
+          detalhe_veiculo: { aluguel: 0, gasolina: 0, gelo: 0, cafe: 0 },
           total_os: 0,
           total_placas: 0,
           ordens: []
@@ -289,6 +311,14 @@ const Relatorios = () => {
       obrasMap[chave].custo_mao_obra += os.custo_mao_obra
       obrasMap[chave].custo_veiculo += os.custo_veiculo
       obrasMap[chave].custo_total += os.custo_total
+      // Somar detalhes mão de obra
+      Object.keys(os.detalhe_mao_obra).forEach(k => {
+        obrasMap[chave].detalhe_mao_obra[k] += os.detalhe_mao_obra[k]
+      })
+      // Somar detalhes veículos
+      Object.keys(os.detalhe_veiculo).forEach(k => {
+        obrasMap[chave].detalhe_veiculo[k] += os.detalhe_veiculo[k]
+      })
       obrasMap[chave].total_os++
       obrasMap[chave].total_placas += os.quantidade_placas || 0
       obrasMap[chave].ordens.push(os)
@@ -322,6 +352,19 @@ const Relatorios = () => {
       custoVeiculo: obras.reduce((sum, o) => sum + o.custo_veiculo, 0),
       custoTotal: obras.reduce((sum, o) => sum + o.custo_total, 0),
       lucroTotal: obras.reduce((sum, o) => sum + o.lucro, 0),
+      detalheMaoObra: {
+        diarias: obras.reduce((sum, o) => sum + o.detalhe_mao_obra.diarias, 0),
+        cafe: obras.reduce((sum, o) => sum + o.detalhe_mao_obra.cafe, 0),
+        almoco: obras.reduce((sum, o) => sum + o.detalhe_mao_obra.almoco, 0),
+        transporte: obras.reduce((sum, o) => sum + o.detalhe_mao_obra.transporte, 0),
+        outros: obras.reduce((sum, o) => sum + o.detalhe_mao_obra.outros, 0),
+      },
+      detalheVeiculo: {
+        aluguel: obras.reduce((sum, o) => sum + o.detalhe_veiculo.aluguel, 0),
+        gasolina: obras.reduce((sum, o) => sum + o.detalhe_veiculo.gasolina, 0),
+        gelo: obras.reduce((sum, o) => sum + o.detalhe_veiculo.gelo, 0),
+        cafe: obras.reduce((sum, o) => sum + o.detalhe_veiculo.cafe, 0),
+      },
       margemMedia: 0,
       ticketMedio: 0,
       totalPlacas: obras.reduce((sum, o) => sum + o.total_placas, 0)
@@ -408,6 +451,19 @@ const Relatorios = () => {
       custoTotal: obrasFiltradas.reduce((sum, o) => sum + o.custo_total, 0),
       custoMaoObra: obrasFiltradas.reduce((sum, o) => sum + o.custo_mao_obra, 0),
       custoVeiculo: obrasFiltradas.reduce((sum, o) => sum + o.custo_veiculo, 0),
+      detalheMaoObra: {
+        diarias: obrasFiltradas.reduce((sum, o) => sum + o.detalhe_mao_obra.diarias, 0),
+        cafe: obrasFiltradas.reduce((sum, o) => sum + o.detalhe_mao_obra.cafe, 0),
+        almoco: obrasFiltradas.reduce((sum, o) => sum + o.detalhe_mao_obra.almoco, 0),
+        transporte: obrasFiltradas.reduce((sum, o) => sum + o.detalhe_mao_obra.transporte, 0),
+        outros: obrasFiltradas.reduce((sum, o) => sum + o.detalhe_mao_obra.outros, 0),
+      },
+      detalheVeiculo: {
+        aluguel: obrasFiltradas.reduce((sum, o) => sum + o.detalhe_veiculo.aluguel, 0),
+        gasolina: obrasFiltradas.reduce((sum, o) => sum + o.detalhe_veiculo.gasolina, 0),
+        gelo: obrasFiltradas.reduce((sum, o) => sum + o.detalhe_veiculo.gelo, 0),
+        cafe: obrasFiltradas.reduce((sum, o) => sum + o.detalhe_veiculo.cafe, 0),
+      },
       lucroTotal: obrasFiltradas.reduce((sum, o) => sum + o.lucro, 0),
       margemMedia: obrasFiltradas.reduce((sum, o) => sum + o.receita, 0) > 0 
         ? (obrasFiltradas.reduce((sum, o) => sum + o.lucro, 0) / obrasFiltradas.reduce((sum, o) => sum + o.receita, 0)) * 100 
@@ -417,6 +473,52 @@ const Relatorios = () => {
   }, [obrasFiltradas, osFiltradas])
 
   const temFiltroAtivo = busca.trim() || filtroCliente
+
+  // ============================================
+  // SELEÇÃO DE OBRAS
+  // ============================================
+  const toggleObraSelecionada = (chave) => {
+    setObrasSelecionadas(prev => {
+      const next = new Set(prev)
+      if (next.has(chave)) next.delete(chave)
+      else next.add(chave)
+      return next
+    })
+  }
+
+  const selecionarTodas = () => {
+    if (obrasSelecionadas.size === obrasFiltradas.length) {
+      setObrasSelecionadas(new Set())
+    } else {
+      setObrasSelecionadas(new Set(obrasFiltradas.map(o => o.chave)))
+    }
+  }
+
+  const totaisSelecionados = useMemo(() => {
+    if (obrasSelecionadas.size === 0) return null
+    const selecionadas = obrasFiltradas.filter(o => obrasSelecionadas.has(o.chave))
+    return {
+      qtd: selecionadas.length,
+      receita: selecionadas.reduce((s, o) => s + o.receita, 0),
+      custoMaoObra: selecionadas.reduce((s, o) => s + o.custo_mao_obra, 0),
+      custoVeiculo: selecionadas.reduce((s, o) => s + o.custo_veiculo, 0),
+      custoTotal: selecionadas.reduce((s, o) => s + o.custo_total, 0),
+      lucro: selecionadas.reduce((s, o) => s + o.lucro, 0),
+      detalheMaoObra: {
+        diarias: selecionadas.reduce((s, o) => s + o.detalhe_mao_obra.diarias, 0),
+        cafe: selecionadas.reduce((s, o) => s + o.detalhe_mao_obra.cafe, 0),
+        almoco: selecionadas.reduce((s, o) => s + o.detalhe_mao_obra.almoco, 0),
+        transporte: selecionadas.reduce((s, o) => s + o.detalhe_mao_obra.transporte, 0),
+        outros: selecionadas.reduce((s, o) => s + o.detalhe_mao_obra.outros, 0),
+      },
+      detalheVeiculo: {
+        aluguel: selecionadas.reduce((s, o) => s + o.detalhe_veiculo.aluguel, 0),
+        gasolina: selecionadas.reduce((s, o) => s + o.detalhe_veiculo.gasolina, 0),
+        gelo: selecionadas.reduce((s, o) => s + o.detalhe_veiculo.gelo, 0),
+        cafe: selecionadas.reduce((s, o) => s + o.detalhe_veiculo.cafe, 0),
+      }
+    }
+  }, [obrasSelecionadas, obrasFiltradas])
 
   // ============================================
   // RENDERIZAÇÃO
@@ -614,8 +716,21 @@ const Relatorios = () => {
                     <span className="text-xl font-bold text-green-600">{formatCurrency(metricasExibir?.receitaTotal || 0)}</span>
                   </div>
                   <div className="pl-4 space-y-2 text-sm">
-                    <div className="flex justify-between"><span className="text-gray-600">(-) Mão de Obra</span><span className="text-red-600">{formatCurrency(metricasExibir?.custoMaoObra || 0)}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-600">(-) Veículos</span><span className="text-red-600">{formatCurrency(metricasExibir?.custoVeiculo || 0)}</span></div>
+                    <div className="flex justify-between font-medium"><span className="text-gray-700">(-) Mão de Obra</span><span className="text-red-600">{formatCurrency(metricasExibir?.custoMaoObra || 0)}</span></div>
+                    <div className="pl-4 space-y-1 text-xs text-gray-500">
+                      <div className="flex justify-between"><span>Diárias</span><span>{formatCurrency(metricasExibir?.detalheMaoObra?.diarias || 0)}</span></div>
+                      {(metricasExibir?.detalheMaoObra?.cafe || 0) > 0 && <div className="flex justify-between"><span>☕ Café</span><span>{formatCurrency(metricasExibir.detalheMaoObra.cafe)}</span></div>}
+                      {(metricasExibir?.detalheMaoObra?.almoco || 0) > 0 && <div className="flex justify-between"><span>🍽️ Almoço</span><span>{formatCurrency(metricasExibir.detalheMaoObra.almoco)}</span></div>}
+                      {(metricasExibir?.detalheMaoObra?.transporte || 0) > 0 && <div className="flex justify-between"><span>🚌 Transporte</span><span>{formatCurrency(metricasExibir.detalheMaoObra.transporte)}</span></div>}
+                      {(metricasExibir?.detalheMaoObra?.outros || 0) > 0 && <div className="flex justify-between"><span>📦 Outros</span><span>{formatCurrency(metricasExibir.detalheMaoObra.outros)}</span></div>}
+                    </div>
+                    <div className="flex justify-between font-medium mt-2"><span className="text-gray-700">(-) Veículos</span><span className="text-red-600">{formatCurrency(metricasExibir?.custoVeiculo || 0)}</span></div>
+                    <div className="pl-4 space-y-1 text-xs text-gray-500">
+                      {(metricasExibir?.detalheVeiculo?.aluguel || 0) > 0 && <div className="flex justify-between"><span>🚗 Aluguel</span><span>{formatCurrency(metricasExibir.detalheVeiculo.aluguel)}</span></div>}
+                      {(metricasExibir?.detalheVeiculo?.gasolina || 0) > 0 && <div className="flex justify-between"><span>⛽ Gasolina</span><span>{formatCurrency(metricasExibir.detalheVeiculo.gasolina)}</span></div>}
+                      {(metricasExibir?.detalheVeiculo?.gelo || 0) > 0 && <div className="flex justify-between"><span>🧊 Gelo</span><span>{formatCurrency(metricasExibir.detalheVeiculo.gelo)}</span></div>}
+                      {(metricasExibir?.detalheVeiculo?.cafe || 0) > 0 && <div className="flex justify-between"><span>☕ Café</span><span>{formatCurrency(metricasExibir.detalheVeiculo.cafe)}</span></div>}
+                    </div>
                   </div>
                   <div className="flex justify-between py-2 border-t">
                     <span className="font-medium">TOTAL CUSTOS</span>
@@ -642,16 +757,34 @@ const Relatorios = () => {
           {/* POR OBRA */}
           {abaAtiva === 'obras' && (
             <div className="space-y-4">
-              <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
-                <p className="font-medium text-blue-800">OBRA = Cliente + Endereço + Potência</p>
-                <p className="text-sm text-blue-600">Receita conta <strong>uma vez</strong> por obra. Custos são somados de todas as OS.</p>
+              <div className="p-4 bg-blue-50 rounded-xl border border-blue-200 flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-blue-800">OBRA = Cliente + Endereço + Potência</p>
+                  <p className="text-sm text-blue-600">Selecione obras para ver o DRE combinado.</p>
+                </div>
+                <button
+                  onClick={selecionarTodas}
+                  className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0"
+                >
+                  {obrasSelecionadas.size === obrasFiltradas.length ? 'Desmarcar Todas' : 'Selecionar Todas'}
+                </button>
               </div>
 
               <div className="space-y-3">
                 {obrasFiltradas.map((obra) => (
-                  <div key={obra.chave} className="card hover:shadow-md cursor-pointer" onClick={() => setObraExpandida(obraExpandida === obra.chave ? null : obra.chave)}>
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      <div>
+                  <div key={obra.chave} className={`card hover:shadow-md cursor-pointer transition-all ${obrasSelecionadas.has(obra.chave) ? 'ring-2 ring-blue-500 bg-blue-50/30' : ''}`}>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4" onClick={() => setObraExpandida(obraExpandida === obra.chave ? null : obra.chave)}>
+                      <div className="flex items-start gap-3">
+                        {/* Checkbox */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleObraSelecionada(obra.chave) }}
+                          className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                            obrasSelecionadas.has(obra.chave) ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300 hover:border-blue-400'
+                          }`}
+                        >
+                          {obrasSelecionadas.has(obra.chave) && <CheckCircle2 className="w-4 h-4" />}
+                        </button>
+                        <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="font-semibold text-gray-900">{obra.cliente_nome}</h3>
                           <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">{obra.total_os} OS</span>
@@ -660,6 +793,7 @@ const Relatorios = () => {
                         <p className="text-sm text-gray-500 flex items-center gap-1 mt-1">
                           <MapPin className="w-3 h-3" />{obra.endereco}{obra.cidade ? ` - ${obra.cidade}` : ''}
                         </p>
+                      </div>
                       </div>
                       <div className="flex flex-wrap items-center gap-4 md:gap-6 text-right">
                         <div><p className="text-xs text-gray-500">Receita</p><p className="font-bold text-green-600">{formatCurrency(obra.receita)}</p>{obra.preco_esperado && <p className="text-xs text-purple-500">Esp: {formatCurrency(obra.preco_esperado)}</p>}</div>
@@ -676,8 +810,21 @@ const Relatorios = () => {
                             <h4 className="font-semibold text-gray-700 mb-3">DRE da Obra</h4>
                             <div className="space-y-2 text-sm">
                               <div className="flex justify-between"><span>Receita</span><span className="font-medium text-green-600">{formatCurrency(obra.receita)}</span></div>
-                              <div className="flex justify-between text-gray-500"><span>(-) Mão de Obra</span><span>{formatCurrency(obra.custo_mao_obra)}</span></div>
-                              <div className="flex justify-between text-gray-500"><span>(-) Veículos</span><span>{formatCurrency(obra.custo_veiculo)}</span></div>
+                              <div className="flex justify-between text-gray-500 font-medium"><span>(-) Mão de Obra</span><span>{formatCurrency(obra.custo_mao_obra)}</span></div>
+                              <div className="pl-3 space-y-0.5 text-xs text-gray-400">
+                                <div className="flex justify-between"><span>Diárias</span><span>{formatCurrency(obra.detalhe_mao_obra.diarias)}</span></div>
+                                {obra.detalhe_mao_obra.cafe > 0 && <div className="flex justify-between"><span>☕ Café</span><span>{formatCurrency(obra.detalhe_mao_obra.cafe)}</span></div>}
+                                {obra.detalhe_mao_obra.almoco > 0 && <div className="flex justify-between"><span>🍽️ Almoço</span><span>{formatCurrency(obra.detalhe_mao_obra.almoco)}</span></div>}
+                                {obra.detalhe_mao_obra.transporte > 0 && <div className="flex justify-between"><span>🚌 Transporte</span><span>{formatCurrency(obra.detalhe_mao_obra.transporte)}</span></div>}
+                                {obra.detalhe_mao_obra.outros > 0 && <div className="flex justify-between"><span>📦 Outros</span><span>{formatCurrency(obra.detalhe_mao_obra.outros)}</span></div>}
+                              </div>
+                              <div className="flex justify-between text-gray-500 font-medium"><span>(-) Veículos</span><span>{formatCurrency(obra.custo_veiculo)}</span></div>
+                              <div className="pl-3 space-y-0.5 text-xs text-gray-400">
+                                {obra.detalhe_veiculo.aluguel > 0 && <div className="flex justify-between"><span>🚗 Aluguel</span><span>{formatCurrency(obra.detalhe_veiculo.aluguel)}</span></div>}
+                                {obra.detalhe_veiculo.gasolina > 0 && <div className="flex justify-between"><span>⛽ Gasolina</span><span>{formatCurrency(obra.detalhe_veiculo.gasolina)}</span></div>}
+                                {obra.detalhe_veiculo.gelo > 0 && <div className="flex justify-between"><span>🧊 Gelo</span><span>{formatCurrency(obra.detalhe_veiculo.gelo)}</span></div>}
+                                {obra.detalhe_veiculo.cafe > 0 && <div className="flex justify-between"><span>☕ Café</span><span>{formatCurrency(obra.detalhe_veiculo.cafe)}</span></div>}
+                              </div>
                               <div className="flex justify-between pt-2 border-t font-medium"><span>Total Custos</span><span className="text-red-600">{formatCurrency(obra.custo_total)}</span></div>
                               <div className={`flex justify-between pt-2 border-t-2 font-bold ${obra.lucro >= 0 ? 'border-green-400' : 'border-red-400'}`}><span>LUCRO</span><span className={obra.lucro >= 0 ? 'text-green-600' : 'text-red-600'}>{formatCurrency(obra.lucro)}</span></div>
                             </div>
@@ -719,6 +866,54 @@ const Relatorios = () => {
                 ))}
                 {obrasFiltradas.length === 0 && <div className="card text-center py-8 text-gray-500">Nenhuma obra encontrada {busca && `para "${busca}"`}</div>}
               </div>
+
+              {/* PAINEL DE TOTALIZAÇÃO - OBRAS SELECIONADAS */}
+              {totaisSelecionados && (
+                <div className="sticky bottom-0 bg-white border-t-2 border-blue-500 rounded-xl shadow-2xl p-5 mt-4 animate-fade-in">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                      📊 DRE das {totaisSelecionados.qtd} obras selecionadas
+                    </h3>
+                    <button onClick={() => setObrasSelecionadas(new Set())} className="text-sm text-gray-500 hover:text-red-500 flex items-center gap-1">
+                      <X className="w-4 h-4" /> Limpar seleção
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* Resumo rápido */}
+                    <div className="flex flex-col gap-2">
+                      <div className="flex justify-between py-1"><span className="font-medium">RECEITA</span><span className="font-bold text-green-600">{formatCurrency(totaisSelecionados.receita)}</span></div>
+                      <div className="flex justify-between py-1"><span className="font-medium">TOTAL CUSTOS</span><span className="font-bold text-red-600">{formatCurrency(totaisSelecionados.custoTotal)}</span></div>
+                      <div className={`flex justify-between py-2 border-t-2 ${totaisSelecionados.lucro >= 0 ? 'border-green-500' : 'border-red-500'}`}>
+                        <span className="font-bold">LUCRO</span>
+                        <span className={`text-xl font-bold ${totaisSelecionados.lucro >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(totaisSelecionados.lucro)}</span>
+                      </div>
+                    </div>
+
+                    {/* Detalhamento Mão de Obra */}
+                    <div className="bg-gray-50 rounded-xl p-3">
+                      <p className="text-sm font-semibold text-gray-700 mb-2">👷 Mão de Obra: <span className="text-red-600">{formatCurrency(totaisSelecionados.custoMaoObra)}</span></p>
+                      <div className="space-y-1 text-xs text-gray-600">
+                        <div className="flex justify-between"><span>Diárias</span><span className="font-medium">{formatCurrency(totaisSelecionados.detalheMaoObra.diarias)}</span></div>
+                        {totaisSelecionados.detalheMaoObra.cafe > 0 && <div className="flex justify-between"><span>☕ Café</span><span className="font-medium">{formatCurrency(totaisSelecionados.detalheMaoObra.cafe)}</span></div>}
+                        {totaisSelecionados.detalheMaoObra.almoco > 0 && <div className="flex justify-between"><span>🍽️ Almoço</span><span className="font-medium">{formatCurrency(totaisSelecionados.detalheMaoObra.almoco)}</span></div>}
+                        {totaisSelecionados.detalheMaoObra.transporte > 0 && <div className="flex justify-between"><span>🚌 Transporte</span><span className="font-medium">{formatCurrency(totaisSelecionados.detalheMaoObra.transporte)}</span></div>}
+                        {totaisSelecionados.detalheMaoObra.outros > 0 && <div className="flex justify-between"><span>📦 Outros</span><span className="font-medium">{formatCurrency(totaisSelecionados.detalheMaoObra.outros)}</span></div>}
+                      </div>
+                    </div>
+
+                    {/* Detalhamento Veículos */}
+                    <div className="bg-gray-50 rounded-xl p-3">
+                      <p className="text-sm font-semibold text-gray-700 mb-2">🚗 Veículos: <span className="text-red-600">{formatCurrency(totaisSelecionados.custoVeiculo)}</span></p>
+                      <div className="space-y-1 text-xs text-gray-600">
+                        {totaisSelecionados.detalheVeiculo.aluguel > 0 && <div className="flex justify-between"><span>🚗 Aluguel</span><span className="font-medium">{formatCurrency(totaisSelecionados.detalheVeiculo.aluguel)}</span></div>}
+                        {totaisSelecionados.detalheVeiculo.gasolina > 0 && <div className="flex justify-between"><span>⛽ Gasolina</span><span className="font-medium">{formatCurrency(totaisSelecionados.detalheVeiculo.gasolina)}</span></div>}
+                        {totaisSelecionados.detalheVeiculo.gelo > 0 && <div className="flex justify-between"><span>🧊 Gelo</span><span className="font-medium">{formatCurrency(totaisSelecionados.detalheVeiculo.gelo)}</span></div>}
+                        {totaisSelecionados.detalheVeiculo.cafe > 0 && <div className="flex justify-between"><span>☕ Café</span><span className="font-medium">{formatCurrency(totaisSelecionados.detalheVeiculo.cafe)}</span></div>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
