@@ -451,16 +451,27 @@ Todos com listagem + form de edição:
 - [ ] **`.DS_Store` está versionado no repo** (6 arquivos) e **falta no `.gitignore`** (que só tem `node_modules`, `.env`, `.env.local`, `dist`). Limpar: `git rm --cached **/.DS_Store` + adicionar `.DS_Store` ao `.gitignore`. Fazer no clone `~/dev`.
 - [ ] **CAPABILITIES.md + CLAUDE.md** (criados nesta sessão) vivem hoje só no Drive. Pra versionar, copiar pro clone `~/dev` e Carlos commita de lá.
 
-### 8.2 Segurança / config
-- [ ] **Anon key do Supabase hardcoded** em `src/lib/supabase.js`. Mover pra `.env` (`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
-- [ ] Policies RLS estão como "Acesso total" `USING (true)` em várias tabelas. RBAC do app não é enforçado no banco — qualquer auth.user lê tudo.
-- [ ] `manifest.json` aponta `start_url=/colaborador/login` — gestor que instalar o PWA cai na tela errada. Talvez precise variar por contexto.
+### 8.2 🚨 SEGURANÇA — CRÍTICO (confirmado 2026-06-01)
+
+> **Banco inteiro exposto à internet pública.** A anon key vai no bundle JS público;
+> com RLS `USING (true)` em tudo, qualquer pessoa (sem login) lê — e provavelmente
+> escreve — qualquer tabela. **Prova empírica** (anon key, sem auth): `lancamentos_financeiros`
+> 372 linhas (HTTP 200), `lancamentos` 1.586, `contas_bancarias` 1, `colaboradores` 42 (com CPF),
+> `clientes` 188. Não é só "colaborador vê financeiro" — é vazamento total + risco de escrita.
+
+- [ ] 🚨 **RLS `USING (true)` em todas as tabelas.** Autorização hoje é só no frontend (cliente fino), que não protege nada — o REST do Supabase responde direto. **Maior risco do projeto.**
+- [ ] 🚨 **Login do colaborador inseguro** (`ColaboradorLogin.jsx`): baixa TODOS os colaboradores + CPF pro navegador via anon, e usa **CPF como senha** (CPF não é segredo). Sessão é só `localStorage`, sem Supabase Auth.
+- [ ] 🚨 **Sem RBAC nas rotas** (`App.jsx`): `PrivateRoute` checa só `user` autenticado, não papel. `is_admin` existe no `AuthContext` mas não gateia nenhuma rota — qualquer usuário logado vê o Dashboard com faturamento/recebimento.
+- ⚠️ **Trade-off do fix:** trancar a RLS pra `authenticated` **quebra o app do colaborador** (ele não tem sessão de auth). Fix correto exige repensar o login do colaborador (auth real / magic-link / edge function) e proteção a nível de coluna nos campos financeiros de `ordens_servico` (valor_obra, valor_cobrado, margem, custo). É projeto, não one-liner — **decidir abordagem com Carlos antes de aplicar em produção.**
+- [ ] **Anon key hardcoded** em `src/lib/supabase.js` — hygiene; mover pra `.env` NÃO resolve segurança (a key é pública por design). O que protege é a RLS.
+- [ ] `manifest.json` aponta `start_url=/colaborador/login` — gestor que instalar o PWA cai na tela errada.
 
 ### 8.3 Duplicações
-- [ ] `src/components/OSChecklist (1).jsx` é cópia do `OSChecklist.jsx`. Apagar.
-- [ ] Tabelas `os` vs `ordens_servico` — auditar qual está em uso real.
-- [ ] Tabelas `lancamentos` vs `lancamentos_financeiros` — idem.
-- [ ] Pastas `configuracoes/` e `usuarios/` ambas têm `Usuarios.jsx`. Só `usuarios/Usuarios.jsx` parece estar no router atual.
+- ✅ `src/components/OSChecklist (1).jsx` — cópia órfã (zero imports). **Removida 2026-06-01** (clone ~/dev).
+- ✅ `.DS_Store` versionado + ausente do `.gitignore` — **desrastreado + `.gitignore` corrigido** 2026-06-01.
+- [ ] Tabelas `os` vs `ordens_servico` — `os` não existe no banco; eram só matches de prefixo. Confirmado: app usa `ordens_servico`.
+- [ ] Tabelas `lancamentos` (1.586) vs `lancamentos_financeiros` (372) — **ambas existem e têm dados**. Auditar qual é a canônica.
+- [ ] Pastas `configuracoes/` e `usuarios/` ambas têm `Usuarios.jsx`. Só `usuarios/Usuarios.jsx` está no router atual.
 
 ### 8.4 Status de MCP (resolvido 2026-06-01)
 - ✅ **MCP `supabase-obras`** conectado (ref `ebpxqmakimkvqoqwfeeh`, scope user). Tools ativam ao reiniciar a sessão.
