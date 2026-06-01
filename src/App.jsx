@@ -91,6 +91,12 @@ const PrivateRoute = ({ children }) => {
     return <Navigate to="/login" replace />
   }
 
+  // Colaborador (login CPF+senha usa email sintético @gestao-obras.local) NUNCA
+  // acessa a área do gestor — mesmo autenticado, é mandado de volta pro app dele.
+  if (user.email?.endsWith('@gestao-obras.local')) {
+    return <Navigate to="/colaborador/minhas-os" replace />
+  }
+
   return <MainLayout>{children}</MainLayout>
 }
 
@@ -420,6 +426,11 @@ function App() {
                 <ServicosExtras />
               </PrivateRoute>
             } />
+
+            {/* Fallback do colaborador: rotas /colaborador/* inexistentes (ex.: histórico,
+                perfil — ainda não construídas) ficam na área do colaborador, nunca caem
+                no dashboard do gestor. */}
+            <Route path="/colaborador/*" element={<Navigate to="/colaborador/minhas-os" replace />} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
