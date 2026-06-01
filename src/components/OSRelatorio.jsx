@@ -49,7 +49,7 @@ const OSRelatorio = ({ ordemServicoId, ordemServico }) => {
           cliente:clientes(*),
           veiculo:veiculos(*),
           empresa:empresas_contratantes(*),
-          servicos:ordem_servico_servicos(
+          servicos:os_servicos(
             *,
             servico:servicos(*)
           )

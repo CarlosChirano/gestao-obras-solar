@@ -62,7 +62,7 @@ const Dashboard = () => {
     queryKey: ['dashboard-servicos'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('ordem_servico_servicos')
+        .from('os_servicos')
         .select(`
           *,
           servico:servicos(nome),
