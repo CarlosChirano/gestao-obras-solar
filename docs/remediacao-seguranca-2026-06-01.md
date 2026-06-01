@@ -26,10 +26,21 @@ Causas:
 - Provado: anônimo bloqueado (`[]`); colaborador intacto. Falta Carlos confirmar gestor logado lê `/financeiro`.
 
 ### Fase 1 — Login seguro do colaborador (CPF + senha, sessão real)
-- **Desenho:** cada colaborador vira um usuário Supabase Auth com email sintético derivado do CPF (ex.: `cpf<digitos>@colaborador.gestao-obras.local`) + senha real (hash no Auth).
-- Login: form pede CPF + senha; app deriva o email sintético **localmente** (sem baixar lista de CPFs) e chama `supabase.auth.signInWithPassword`. Sessão real → RLS passa a proteger.
-- Onboarding dos 42: script server-side (service_role) cria os usuários Auth a partir de `colaboradores`. Senha inicial = definida pelo gestor ou primeiro-acesso define. (decidir)
-- Construir **ao lado** do login atual; não remover o antigo ainda.
+- **Desenho:** cada colaborador vira um usuário Supabase Auth, email sintético `colab.<digitos_cpf>@gestao-obras.local` + senha real. `colaboradores.auth_user_id` liga os dois.
+- Login: form pede CPF + senha; deriva o email **localmente** (sem baixar lista de CPFs) e chama `signInWithPassword`. Sessão real → RLS protege.
+- **Decisões do Carlos:** senha definida pelo gestor no cadastro (modelo contínuo); migração dos 42 existentes = **senha inicial = CPF + sessão real** (ninguém trava na virada; gestor troca depois). Fazer cutover assim que API de Auth estável + equipe avisada.
+
+**PREPARADO nesta sessão (inerte, não conectado):**
+- ✅ Coluna `colaboradores.auth_user_id` (+ índice) criada em prod.
+- ✅ `src/pages/colaborador/ColaboradorLogin.novo.jsx` — login novo (CPF+senha, sem leak de CPF). **Não importado** ainda.
+- ✅ `scripts/provisionar-colaboradores.mjs` — cria os 42 no Auth (senha inicial=CPF) e preenche `auth_user_id`. Lê service_role de env. **Não executado** ainda.
+
+**Passos do CUTOVER (coordenado, quando API estável + equipe avisada):**
+1. Rodar `scripts/provisionar-colaboradores.mjs` (em ~/dev, service_role em env). Verificar `auth_user_id` preenchido nos 42.
+2. Conectar o login novo: substituir `ColaboradorLogin.jsx` pelo `.novo.jsx` (ou ajustar o import no App.jsx) e push.
+3. Testar login real de um colaborador (CPF+senha) + check-in/out de ponta a ponta.
+4. Só então Fase 3 (trancar o resto da RLS + escopo por colaborador). NUNCA trancar antes do passo 1+3 validados.
+5. Construir reset de senha pelo gestor no cadastro (edge function / RPC com service_role) — substitui a senha-inicial=CPF.
 
 ### Fase 2 — Cutover do colaborador
 - Migrar colaboradores pro login novo, comunicar a equipe, then remover o login antigo (que baixava CPFs).
